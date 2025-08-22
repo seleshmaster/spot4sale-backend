@@ -35,6 +35,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/spots").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/spots/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/bookings").authenticated()
+                        .requestMatchers("/api/owner/**").authenticated()
                         .anyRequest().authenticated())// <-- add this
                 .oauth2Login(o -> o
                         .userInfoEndpoint(u -> u.oidcUserService(oidcUserUpsertService))

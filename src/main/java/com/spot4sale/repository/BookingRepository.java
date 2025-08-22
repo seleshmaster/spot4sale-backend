@@ -59,7 +59,8 @@ public interface BookingRepository extends JpaRepository<Booking, java.util.UUID
 
 
 
-    // BookingRepository.java
+    List<Booking> findBySpotIdInOrderByStartDateDesc(List<UUID> spotIds);
+
 
 
 }
