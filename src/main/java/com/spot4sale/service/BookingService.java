@@ -160,5 +160,18 @@ public class BookingService {
         return bookings.findByUserIdOrderByStartDateDesc(u.getId());
     }
 
+    @Transactional
+    public Booking markPaid(UUID bookingId) {
+        var b = bookings.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+        if (!"PAID".equals(b.getStatus())) {
+            b.setStatus("PAID");
+            // Optional: set a paidAt timestamp if you have one
+            // b.setPaidAt(Instant.now());
+            b = bookings.save(b);
+        }
+        return b;
+    }
+
 }
 
