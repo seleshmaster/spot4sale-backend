@@ -1,0 +1,24 @@
+
+package com.spot4sale.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.UUID;
+
+@Entity @Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Table(name = "booking",
+  indexes = { @Index(name="ix_booking_spot_dates", columnList = "spotId,startDate,endDate") })
+public class Booking {
+  @Id @GeneratedValue private UUID id;
+  @Column(nullable=false) private UUID userId;
+  @Column(nullable=false) private UUID spotId;
+  @Column(nullable=false) private LocalDate startDate;
+  @Column(nullable=false) private LocalDate endDate;
+  @Column(nullable=false) private String status;
+  // PENDING | CONFIRMED | CANCELLED
+  @Column(name = "total_price")   // <-- add this to be explicit
+  private BigDecimal totalPrice;
+}
