@@ -1,7 +1,6 @@
 
 package com.spot4sale.config;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -17,8 +16,10 @@ import jakarta.servlet.http.HttpServletResponse;
 @Configuration
 public class SecurityConfig {
 
-    @Autowired
-    OidcUserUpsertService oidcUserUpsertService;
+    private final OidcUserUpsertService oidcUserUpsertService;
+    public SecurityConfig(OidcUserUpsertService oidcUserUpsertService) {
+        this.oidcUserUpsertService = oidcUserUpsertService;
+    }
 
 
     @Bean

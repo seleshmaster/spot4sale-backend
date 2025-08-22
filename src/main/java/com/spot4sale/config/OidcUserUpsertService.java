@@ -28,15 +28,20 @@ public class OidcUserUpsertService extends OidcUserService {
         String email = oidc.getEmail();
         String name  = oidc.getFullName() != null ? oidc.getFullName() : email;
 
-        users.findByEmail(email).orElseGet(() -> {
-            User u = new User();
-            u.setEmail(email);
-            u.setName(name);
-            u.setRole("USER");
-            u.setAuthProvider("GOOGLE");
-            return users.save(u);
+        User u =  users.findByEmail(email).orElseGet(() -> {
+            User nu = new User();
+            nu.setEmail(email);
+            nu.setName(name);
+            nu.setRole("USER");
+            nu.setAuthProvider("GOOGLE");
+            return users.save(nu);
         });
 
+        // If legacy/null role slipped in, normalize to USER
+        if (u.getRole() == null || u.getRole().isBlank()) {
+            u.setRole("USER");
+            users.save(u);
+        }
         // Merge authorities
         Set<GrantedAuthority> mappedAuthorities = new HashSet<>(oidc.getAuthorities());
         mappedAuthorities.add(new SimpleGrantedAuthority("ROLE_USER"));

@@ -18,11 +18,11 @@ public class SpotController {
     private final SpotService svc;
     public SpotController(SpotService svc){ this.svc = svc; }
 
-    /** Public: show all spots for a store (buyers need this) */
-    @GetMapping("/stores/{storeId}/spots")
-    public List<Spot> byStore(@PathVariable UUID storeId) {
-        return svc.listByStore(storeId);
-    }
+//    /** Public: show all spots for a store (buyers need this) */
+//    @GetMapping("/stores/{storeId}/spots")
+//    public List<Spot> byStore(@PathVariable UUID storeId) {
+//        return svc.listByStore(storeId);
+//    }
 
     /** Owner-only: create a spot */
     @PostMapping("/spots")

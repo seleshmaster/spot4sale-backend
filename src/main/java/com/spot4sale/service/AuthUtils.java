@@ -1,16 +1,19 @@
 
 package com.spot4sale.service;
 
+import com.spot4sale.dto.MeResponse;
 import com.spot4sale.entity.User;
 import com.spot4sale.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -74,4 +77,23 @@ public class AuthUtils {
                 .orElseThrow(() -> new IllegalStateException("User not found for email: " + someEmailSource));
     }
 
+
+    public MeResponse me(Authentication auth) {
+        String email = auth.getName();
+        User dbUser = users.findByEmail(email).orElse(null);
+
+        String role = dbUser != null && dbUser.getRole() != null && !dbUser.getRole().isBlank()
+                ? dbUser.getRole()
+                : "USER";
+
+        List<String> authorities = auth.getAuthorities()
+                .stream().map(GrantedAuthority::getAuthority).toList();
+
+        return new MeResponse(
+                dbUser != null && dbUser.getName()!=null ? dbUser.getName() : email,
+                email,
+                role,
+                authorities
+        );
+    }
 }

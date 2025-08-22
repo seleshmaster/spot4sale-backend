@@ -1,18 +1,23 @@
-
+// src/main/java/com/spot4sale/controller/AuthController.java
 package com.spot4sale.controller;
 
+import com.spot4sale.dto.MeResponse;
+import com.spot4sale.service.AuthUtils;
 import org.springframework.security.core.Authentication;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
-  @GetMapping("/me")
-  public ResponseEntity<?> me(Authentication auth){
-    if (auth == null) return ResponseEntity.status(401).body(Map.of("error","Unauthorized"));
-    return ResponseEntity.ok(Map.of("name", auth.getName(), "authorities", auth.getAuthorities()));
-  }
 
+    private final AuthUtils authService;
+
+    public AuthController(AuthUtils authService) {
+        this.authService = authService;
+    }
+
+    @GetMapping("/me")
+    public MeResponse me(Authentication auth) {
+        return authService.me(auth);
+    }
 }
