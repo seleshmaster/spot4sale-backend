@@ -14,6 +14,7 @@ import com.spot4sale.repository.UserRepository;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Refund;
 import com.stripe.param.RefundCreateParams;
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -29,20 +30,16 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class BookingService {
 
     private final BookingRepository bookings;
     private final SpotRepository spots;
     private final StoreRepository stores;
     private final UserRepository users;
+    private final StoreService storeService;
 
-    public BookingService(BookingRepository bookings, SpotRepository spots, StoreRepository stores, UserRepository users) {
-        this.bookings = bookings;
-        this.spots = spots;
-        this.stores = stores;
-        this.users = users;
 
-    }
 
     /**
      * Create a booking for the authenticated user.
@@ -79,6 +76,12 @@ public class BookingService {
         long overlaps = bookings.countOverlapping(spotId, start, end);
         if (overlaps > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This spot is already booked for those dates");
+        }
+
+        // after you’ve resolved spot -> storeId
+        if (!storeService.isStoreOpenForRange(spot.getStoreId(), start, end)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Store is closed on one or more of the selected dates");
         }
 
         // 4) Compute total (pricePerDay * nights)

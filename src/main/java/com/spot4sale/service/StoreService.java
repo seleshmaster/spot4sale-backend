@@ -1,16 +1,11 @@
 // src/main/java/com/spot4sale/service/StoreService.java
 package com.spot4sale.service;
 
-import com.spot4sale.dto.CreateSpotRequest;
-import com.spot4sale.dto.CreateStoreRequest;
-import com.spot4sale.dto.StoreNearbyDTO;
-import com.spot4sale.entity.Spot;
-import com.spot4sale.entity.Store;
-import com.spot4sale.entity.User;
-import com.spot4sale.repository.SpotRepository;
-import com.spot4sale.repository.StoreRepository;
-import com.spot4sale.repository.UserRepository;
+import com.spot4sale.dto.*;
+import com.spot4sale.entity.*;
+import com.spot4sale.repository.*;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -20,25 +15,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.util.*;
 
 @Service
+@RequiredArgsConstructor
 public class StoreService {
 
     private final StoreRepository stores;
     private final SpotRepository spots;
     private final UserRepository users;
     private final AuthUtils authUtils;
+    private final StoreBlackoutRepository blackouts; // you already have this
+    private final StoreOpenSeasonRepository seasons;
+    private final StoreWeeklyOpenRepository weeklyOpen;
 
-    public StoreService(StoreRepository stores,
-                        SpotRepository spots,
-                        UserRepository users,
-                        AuthUtils authUtils) {
-        this.stores = stores;
-        this.spots = spots;
-        this.users = users;
-        this.authUtils = authUtils;
-    }
 
     /* ---------- Commands ---------- */
 
@@ -127,4 +118,125 @@ public class StoreService {
     public List<Spot> listSpots(UUID storeId) {
         return spots.findByStoreId(storeId);
     }
+
+
+    @Transactional(readOnly = true)
+    public AvailabilityRangeDTO getAvailability(UUID storeId, LocalDate from, LocalDate to) {
+        var bs = blackouts.findByStoreIdAndDayBetween(storeId, from, to);
+        var blackoutDays = bs.stream().map(b -> b.getDay()).toList();
+
+        List<Integer> openDays = weeklyOpen != null
+                ? weeklyOpen.findByStoreId(storeId).stream()
+                .filter(StoreWeeklyOpen::isOpen).map(StoreWeeklyOpen::getDayOfWeek).toList()
+                : List.of(); // empty => treat as open all days except blackout
+
+        return new AvailabilityRangeDTO(blackoutDays, openDays);
+    }
+
+    @Transactional
+    public void setBlackouts(UUID storeId, List<LocalDate> days, Authentication auth, AuthUtils authUtils) {
+        // owner check
+        var userId = authUtils.currentUserId(auth);
+        var store = stores.findById(storeId).orElseThrow();
+        if (!store.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+
+        // upsert simple: clear + insert (MVP)
+        var existing = blackouts.findByStoreIdAndDayBetween(storeId,
+                days.stream().min(LocalDate::compareTo).orElse(LocalDate.now()),
+                days.stream().max(LocalDate::compareTo).orElse(LocalDate.now()));
+        blackouts.deleteAll(existing);
+
+        for (var d : days) {
+            var b = new StoreBlackout(null, storeId, d, "Owner-set", null);
+            blackouts.save(b);
+        }
+    }
+
+    /** Utility used by BookingService to reject unavailable dates */
+    @Transactional(readOnly = true)
+    public boolean isStoreOpenForRange(UUID storeId, LocalDate start, LocalDate end) {
+        // any blackout in range?
+        if (!blackouts.findByStoreIdAndDayBetween(storeId, start, end).isEmpty()) return false;
+
+        // optional weekly rule: if weekly table has rows, treat NOT listed days as closed
+        var weekly = weeklyOpen.findByStoreId(storeId);
+        if (!weekly.isEmpty()) {
+            var openSet = weekly.stream().filter(StoreWeeklyOpen::isOpen)
+                    .map(StoreWeeklyOpen::getDayOfWeek).collect(java.util.stream.Collectors.toSet());
+            for (var d = start; !d.isAfter(end); d = d.plusDays(1)) {
+                int dow = d.getDayOfWeek().getValue(); // 1..7
+                if (!openSet.contains(dow)) return false;
+            }
+        }
+        return true;
+    }
+
+    @Transactional(readOnly = true)
+    public List<SeasonDTO> listSeasons(UUID storeId) {
+        return seasons.findByStoreId(storeId).stream()
+                .map(s -> new SeasonDTO(s.getId(), s.getStartDate(), s.getEndDate(), s.getOpenWeekdays(), s.getNote()))
+                .toList();
+    }
+
+    @Transactional
+    public SeasonDTO addSeason(UUID storeId, LocalDate start, LocalDate end, int[] openWeekdays, String note, Authentication auth) {
+        var userId = authUtils.currentUserId(auth);
+        var store = stores.findById(storeId).orElseThrow();
+        if (!store.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        var s = new StoreOpenSeason();
+        s.setStoreId(storeId);
+        s.setStartDate(start);
+        s.setEndDate(end);
+        s.setOpenWeekdays(openWeekdays);
+        s.setNote(note);
+        s = seasons.save(s);
+        return new SeasonDTO(s.getId(), s.getStartDate(), s.getEndDate(), s.getOpenWeekdays(), s.getNote());
+    }
+
+    @Transactional
+    public void deleteSeason(UUID storeId, UUID seasonId, Authentication auth) {
+        var userId = authUtils.currentUserId(auth);
+        var store = stores.findById(storeId).orElseThrow();
+        if (!store.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        var s = seasons.findById(seasonId).orElseThrow();
+        if (!s.getStoreId().equals(storeId)) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        seasons.delete(s);
+    }
+
+    /** Core check used by BookingService: date range must be inside at least one season AND not in blackouts. */
+    @Transactional(readOnly = true)
+    public boolean isOpenAccordingToSeasons(UUID storeId, LocalDate start, LocalDate end) {
+        // If no seasons defined, treat as open (only blackouts apply)
+        var storeSeasons = seasons.findByStoreId(storeId);
+        if (storeSeasons.isEmpty()) {
+            return blackouts.findByStoreIdAndDayBetween(storeId, start, end).isEmpty();
+        }
+
+        // Each day must be covered by at least one season && weekday allowed && not blacked out
+        var blackoutDays = new java.util.HashSet<LocalDate>(
+                blackouts.findByStoreIdAndDayBetween(storeId, start, end).stream().map(b -> b.getDay()).toList()
+        );
+
+        for (var d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            if (blackoutDays.contains(d)) return false;
+
+            boolean covered = false;
+            int isoDow = d.getDayOfWeek().getValue(); // 1..7
+            for (var s : storeSeasons) {
+                if ((d.isAfter(s.getEndDate()) || d.isBefore(s.getStartDate()))) continue;
+                int[] ow = s.getOpenWeekdays();
+                if (ow != null && ow.length > 0) {
+                    // must be in the allowed weekdays
+                    boolean allowedDow = java.util.Arrays.stream(ow).anyMatch(v -> v == isoDow);
+                    if (!allowedDow) continue;
+                }
+                covered = true;
+                break;
+            }
+            if (!covered) return false; // this day not allowed by any season
+        }
+        return true;
+    }
 }
+
+

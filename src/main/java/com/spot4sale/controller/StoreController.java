@@ -1,19 +1,21 @@
 package com.spot4sale.controller;
 
-import com.spot4sale.dto.CreateSpotRequest;
-import com.spot4sale.dto.CreateStoreRequest;
-import com.spot4sale.dto.StoreNearbyDTO;
+import com.spot4sale.dto.*;
 import com.spot4sale.entity.Spot;
 import com.spot4sale.entity.Store;
+import com.spot4sale.service.AuthUtils;
 import com.spot4sale.service.StoreService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.*;
 
 @RestController
@@ -22,6 +24,7 @@ import java.util.*;
 public class StoreController {
 
     private final StoreService storeService;
+    private final AuthUtils authUtils;
 
     @PreAuthorize("hasAnyRole('USER','STORE_OWNER')")
     @PostMapping
@@ -71,4 +74,41 @@ public class StoreController {
     public Map<String, Object> connectedAccount(@PathVariable UUID id, Authentication auth) {
         return storeService.connectedAccount(id, auth);
     }
+
+    // GET availability for a calendar (owner & customers)
+    @GetMapping("/{storeId}/availability")
+    public AvailabilityRangeDTO availability(@PathVariable UUID storeId,
+                                             @RequestParam LocalDate from,
+                                             @RequestParam LocalDate to) {
+        return storeService.getAvailability(storeId, from, to);
+    }
+
+    // OWNER: set blackout dates (simple MVP)
+    @PreAuthorize("hasAnyRole('STORE_OWNER')")
+    @PostMapping("/{storeId}/availability/blackouts")
+    public void setBlackouts(@PathVariable UUID storeId,
+                             @RequestBody List<LocalDate> days,
+                             Authentication auth) {
+        storeService.setBlackouts(storeId, days, auth, authUtils);
+    }
+
+    @PreAuthorize("hasAnyRole('STORE_OWNER')")
+    @GetMapping("/{storeId}/availability/seasons")
+    public List<SeasonDTO> listSeasons(@PathVariable UUID storeId) {
+        return storeService.listSeasons(storeId);
+    }
+
+    @PreAuthorize("hasAnyRole('STORE_OWNER')")
+    @PostMapping("/{storeId}/availability/seasons")
+    public SeasonDTO addSeason(@PathVariable UUID storeId, @RequestBody @Valid CreateSeasonRequest r, Authentication auth) {
+        return storeService.addSeason(storeId, r.startDate(), r.endDate(), r.openWeekdays(), r.note(), auth);
+    }
+
+    @PreAuthorize("hasAnyRole('STORE_OWNER')")
+    @DeleteMapping("/{storeId}/availability/seasons/{seasonId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteSeason(@PathVariable UUID storeId, @PathVariable UUID seasonId, Authentication auth) {
+        storeService.deleteSeason(storeId, seasonId, auth);
+    }
+
 }
