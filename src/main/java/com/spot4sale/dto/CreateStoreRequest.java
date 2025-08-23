@@ -12,5 +12,6 @@ public record CreateStoreRequest(
                 message = "zipCode must be 3–12 chars (letters/numbers/hyphen/space)"
         ) String zipCode,
         @NotNull @DecimalMin(value = "-90.0")  @DecimalMax(value = "90.0")  Double latitude,
-        @NotNull @DecimalMin(value = "-180.0") @DecimalMax(value = "180.0") Double longitude
+        @NotNull @DecimalMin(value = "-180.0") @DecimalMax(value = "180.0") Double longitude,
+        Integer cancellationCutoffHours // nullable; defaulted in service
 ) {}

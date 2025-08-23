@@ -48,8 +48,9 @@ public class StoreService {
 
         Store s = new Store(
                 null, ownerId, r.name(), r.description(), r.address(),
-                r.city(), r.zipCode(), r.latitude(), r.longitude()
-        );
+                r.city(), r.zipCode(), r.latitude(), r.longitude(),
+                r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : 24);
+
         Store saved = stores.save(s);
 
         // Promote the creator to STORE_OWNER if they are still USER

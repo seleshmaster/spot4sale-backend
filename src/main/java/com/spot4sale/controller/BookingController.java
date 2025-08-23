@@ -46,4 +46,8 @@ public class BookingController {
         return this.service.getDetails(id, auth);
     }
 
+    @PostMapping("/{id}/cancel")
+    public Booking cancel(@PathVariable UUID id, Authentication auth) {
+        return service.cancelMyBooking(id, auth);
+    }
 }

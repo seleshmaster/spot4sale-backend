@@ -1,6 +1,7 @@
 
 package com.spot4sale.entity;
 
+import jakarta.annotation.Nullable;
 import jakarta.persistence.*;
 import lombok.*;
 import java.util.UUID;
@@ -14,4 +15,5 @@ public class Store {
   private String description;
   private String address; private String city; private String zipCode;
   private Double latitude; private Double longitude;
+  @Nullable private Integer cancellationCutoffHours;
 }

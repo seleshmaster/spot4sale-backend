@@ -5,7 +5,9 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity @Getter @Setter @NoArgsConstructor @AllArgsConstructor
@@ -21,4 +23,17 @@ public class Booking {
   // PENDING | CONFIRMED | CANCELLED
   @Column(name = "total_price")   // <-- add this to be explicit
   private BigDecimal totalPrice;
+  @Column(name = "payment_intent_id")
+  private String paymentIntentId;
+  @Column(name = "refund_id")
+  private String refundId;
+  @Column(name = "refunded_at")
+  private Instant refundedAt;
+  @Column(name = "refund_amount_cents")
+  private BigDecimal refundAmountCents;
+  @Column(name = "cancel_reason")
+  private String cancelReason;
+
+
+
 }

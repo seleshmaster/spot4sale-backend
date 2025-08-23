@@ -13,9 +13,12 @@ import com.spot4sale.repository.UserRepository;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
+import com.stripe.model.EventDataObjectDeserializer;
 import com.stripe.model.PaymentIntent;
+import com.stripe.net.ApiResource;
 import com.stripe.net.Webhook;
 import com.stripe.param.PaymentIntentCreateParams;
+import jakarta.annotation.PostConstruct;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -50,8 +53,14 @@ public class PaymentService {
         this.bookingService = bookingService;
     }
 
+    @PostConstruct
+    void initStripe() {
+        com.stripe.Stripe.apiKey = props.getSecretKey(); // or getApiKey(), whatever your StripeProperties exposes
+    }
+
     /** Create PaymentIntent for a booking (keeps your current API/shape) */
-    @Transactional(readOnly = true)
+    /** Create PaymentIntent for a booking (keeps your current API/shape) */
+    @Transactional // <-- remove readOnly=true so we can update the booking
     public Map<String, String> createIntentForBooking(InitPaymentRequest req, Authentication auth) {
         User user = AuthUtils.requireUser(users, auth);
 
@@ -83,8 +92,8 @@ public class PaymentService {
                     )
                     .putMetadata("bookingId", b.getId().toString());
 
-            if (props.isConnectEnabled() &&
-                    owner.getStripeAccountId() != null && !owner.getStripeAccountId().isBlank()) {
+            if (props.isConnectEnabled()
+                    && owner.getStripeAccountId() != null && !owner.getStripeAccountId().isBlank()) {
                 builder
                         .setApplicationFeeAmount(appFeeCents)
                         .setTransferData(
@@ -93,7 +102,13 @@ public class PaymentService {
                                         .build()
                         );
             }
+
             PaymentIntent pi = PaymentIntent.create(builder.build());
+
+            // 👇 persist the PI id so refunds/cancellations can find it later
+            b.setPaymentIntentId(pi.getId());
+            bookings.save(b);
+
             return Map.of("clientSecret", pi.getClientSecret());
         } catch (StripeException se) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stripe error: " + se.getMessage());
@@ -106,9 +121,6 @@ public class PaymentService {
     @Transactional
     public void handleWebhook(String payload, String signatureHeader) {
         final String secret = props.getWebhookSecret();
-        if (secret == null || secret.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Webhook not configured");
-        }
         final Event event;
         try {
             event = Webhook.constructEvent(payload, signatureHeader, secret);
@@ -116,19 +128,31 @@ public class PaymentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Stripe signature");
         }
 
-        if ("payment_intent.succeeded".equals(event.getType())) {
-            PaymentIntent pi = (PaymentIntent) event.getDataObjectDeserializer()
-                    .getObject()
-                    .orElse(null);
+        final String type = event.getType();
+        // log type to verify you're receiving it
+        // log.info("Stripe event: {}", type);
+
+        if ("payment_intent.succeeded".equals(type)) {
+            EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
+
+            PaymentIntent pi = deserializer.getObject()
+                    .map(obj -> (PaymentIntent) obj)
+                    .orElseGet(() -> {
+                        // Fallback: deserialize from raw JSON (not expanded object)
+                        String raw = deserializer.getRawJson();      // available in stripe-java 20+
+                        return ApiResource.GSON.fromJson(raw, PaymentIntent.class);
+                    });
+
             if (pi != null && pi.getMetadata() != null) {
                 String bookingIdStr = pi.getMetadata().get("bookingId");
-                if (bookingIdStr != null) {
+                if (bookingIdStr != null && !bookingIdStr.isBlank()) {
                     UUID bookingId = UUID.fromString(bookingIdStr);
-                    bookingService.markPaid(bookingId); // delegate to business service
+                    bookingService.markPaid(bookingId); // will now run
                 }
             }
         }
-        // handle other events if needed
+
+        // handle other events as needed
     }
 
     private static long toCents(BigDecimal dollars) {
