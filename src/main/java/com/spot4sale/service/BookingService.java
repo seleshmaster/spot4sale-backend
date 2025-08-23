@@ -11,7 +11,6 @@ import com.spot4sale.repository.BookingRepository;
 import com.spot4sale.repository.SpotRepository;
 import com.spot4sale.repository.StoreRepository;
 import com.spot4sale.repository.UserRepository;
-import com.spot4sale.service.AuthUtils;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Refund;
 import com.stripe.param.RefundCreateParams;
@@ -23,7 +22,6 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.core.Authentication;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
 
@@ -37,14 +35,13 @@ public class BookingService {
     private final SpotRepository spots;
     private final StoreRepository stores;
     private final UserRepository users;
-    private final AuthUtils authUtils;
 
-    public BookingService(BookingRepository bookings, SpotRepository spots, StoreRepository stores, UserRepository users, AuthUtils authUtils) {
+    public BookingService(BookingRepository bookings, SpotRepository spots, StoreRepository stores, UserRepository users) {
         this.bookings = bookings;
         this.spots = spots;
         this.stores = stores;
         this.users = users;
-        this.authUtils = authUtils;
+
     }
 
     /**
