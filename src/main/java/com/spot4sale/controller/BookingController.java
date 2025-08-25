@@ -1,8 +1,10 @@
 package com.spot4sale.controller;
 
 import com.spot4sale.dto.BookingDetailsDto;
+import com.spot4sale.dto.CreateBookingRequest;
 import com.spot4sale.entity.Booking;
-import com.spot4sale.service.AuthUtils;
+import com.spot4sale.dto.CheckAvailabilityRequest;
+import com.spot4sale.dto.CheckAvailabilityResponse;
 import com.spot4sale.service.BookingService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -23,7 +25,11 @@ public class BookingController {
         this.service = service;
     }
 
-    public static record CreateBookingRequest(UUID spotId, LocalDate startDate, LocalDate endDate) {}
+
+    @PostMapping("/availability/check")
+    public CheckAvailabilityResponse check(@RequestBody CheckAvailabilityRequest r) {
+        return this.service.checkAvailability(r.spotId(), r.startDate(), r.endDate());
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

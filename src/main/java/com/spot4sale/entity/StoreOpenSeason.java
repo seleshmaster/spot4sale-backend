@@ -1,29 +1,51 @@
+// src/main/java/com/spot4sale/entity/StoreOpenSeason.java
 package com.spot4sale.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
-@Entity @Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Entity
+@Table(name = "store_open_season")
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class StoreOpenSeason {
-    @Id @GeneratedValue private UUID id;
-    @Column(nullable=false) private UUID storeId;
-    @Column(nullable=false) private LocalDate startDate;
-    @Column(nullable=false) private LocalDate endDate;
-    // store as int[] (1..7) or null for all days
-    @Column(name="open_weekdays") private int[] openWeekdays;
+    @Id
+    @GeneratedValue
+    private UUID id;
+
+    @Column(name = "store_id", nullable = false)
+    private UUID storeId;
+
+    @Column(name = "start_date", nullable = false)
+    private LocalDate startDate;
+
+    @Column(name = "end_date", nullable = false)
+    private LocalDate endDate;
+
+    // stored as CSV string in DB (e.g. "1,2,3,4,5")
+    @Column(name = "open_weekdays") // VARCHAR
+    private String openWeekdaysCsv;
+
+    @Column(name = "note")
     private String note;
-    // import java.time.OffsetDateTime;
 
-    @Column(
-            name = "created_at",
-            nullable = false,
-            updatable = false,
-            insertable = false,                          // 👈 don't include in INSERT
-            columnDefinition = "timestamptz default now()"
-    )
-    private OffsetDateTime createdAt;
+    @Transient
+    public List<Integer> getOpenWeekdays() {
+        if (openWeekdaysCsv == null || openWeekdaysCsv.isBlank()) return List.of();
+        return Arrays.stream(openWeekdaysCsv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(Integer::parseInt)
+                .collect(Collectors.toList());
+    }
 
+    public void setOpenWeekdays(List<Integer> days) {
+        if (days == null || days.isEmpty()) {
+            this.openWeekdaysCsv = null;
+        } else {
+            this.openWeekdaysCsv = days.stream().map(String::valueOf).collect(Collectors.joining(","));
+        }
+    }
 }

@@ -26,10 +26,10 @@ public class StoreService {
     private final SpotRepository spots;
     private final UserRepository users;
     private final AuthUtils authUtils;
-    private final StoreBlackoutRepository blackouts; // you already have this
-    private final StoreOpenSeasonRepository seasons;
-    private final StoreWeeklyOpenRepository weeklyOpen;
 
+    // Repos used for availability/calendar
+    private final StoreBlackoutRepository blackouts;            // expect: findByStoreIdAndDateBetween(...)
+    private final StoreOpenSeasonRepository seasons;            // expect: findByStoreId(...)
 
     /* ---------- Commands ---------- */
 
@@ -40,14 +40,15 @@ public class StoreService {
         Store s = new Store(
                 null, ownerId, r.name(), r.description(), r.address(),
                 r.city(), r.zipCode(), r.latitude(), r.longitude(),
-                r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : 24);
+                r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : 24
+        );
 
         Store saved = stores.save(s);
 
-        // Promote the creator to STORE_OWNER if they are still USER
+        // Promote the creator to STORE_OWNER if still USER
         User me = users.findById(ownerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-        if (!"STORE_OWNER".equals(me.getRole())) {
+        if (!"STORE_OWNER".equalsIgnoreCase(me.getRole())) {
             me.setRole("STORE_OWNER");
             users.save(me);
         }
@@ -119,19 +120,36 @@ public class StoreService {
         return spots.findByStoreId(storeId);
     }
 
-
+    /**
+     * Simple range availability summary:
+     *  - blackoutDays: all days blocked by explicit blackouts in [from, to]
+     *  - openDays (legacy): left empty here; seasons should drive UI detail.
+     */
+    // StoreService.java (replace the whole getAvailability method)
     @Transactional(readOnly = true)
     public AvailabilityRangeDTO getAvailability(UUID storeId, LocalDate from, LocalDate to) {
-        var bs = blackouts.findByStoreIdAndDayBetween(storeId, from, to);
-        var blackoutDays = bs.stream().map(b -> b.getDay()).toList();
+        // blackouts in range
+        var bs = blackouts.findByStoreIdAndDateBetween(storeId, from, to);
+        var blackoutDays = bs.stream().map(StoreBlackout::getDate).toList();
 
-        List<Integer> openDays = weeklyOpen != null
-                ? weeklyOpen.findByStoreId(storeId).stream()
-                .filter(StoreWeeklyOpen::isOpen).map(StoreWeeklyOpen::getDayOfWeek).toList()
-                : List.of(); // empty => treat as open all days except blackout
+        // seasons that overlap the requested range
+        // (assumes repo has findByStoreId; we filter overlaps in memory)
+        var allSeasons = seasons.findByStoreId(storeId);
+        var overlappingSeasons = allSeasons.stream()
+                .filter(s -> !(s.getEndDate().isBefore(from) || s.getStartDate().isAfter(to)))
+                .map(s -> new SeasonDTO(
+                        s.getId(),
+                        s.getStartDate(),
+                        s.getEndDate(),
+                        s.getOpenWeekdays(),   // List<Integer> (from CSV converter in entity)
+                        s.getNote()
+                ))
+                .toList();
 
-        return new AvailabilityRangeDTO(blackoutDays, openDays);
+        // "openWeekdays" is legacy here; keep empty for now (seasons govern real rules)
+        return new AvailabilityRangeDTO(blackoutDays, List.of(), overlappingSeasons);
     }
+
 
     @Transactional
     public void setBlackouts(UUID storeId, List<LocalDate> days, Authentication auth, AuthUtils authUtils) {
@@ -140,11 +158,13 @@ public class StoreService {
         var store = stores.findById(storeId).orElseThrow();
         if (!store.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
 
-        // upsert simple: clear + insert (MVP)
-        var existing = blackouts.findByStoreIdAndDayBetween(storeId,
-                days.stream().min(LocalDate::compareTo).orElse(LocalDate.now()),
-                days.stream().max(LocalDate::compareTo).orElse(LocalDate.now()));
-        blackouts.deleteAll(existing);
+        // upsert MVP: clear existing in that span, then insert all provided
+        if (!days.isEmpty()) {
+            var min = days.stream().min(LocalDate::compareTo).orElse(LocalDate.now());
+            var max = days.stream().max(LocalDate::compareTo).orElse(LocalDate.now());
+            var existing = blackouts.findByStoreIdAndDateBetween(storeId, min, max);
+            blackouts.deleteAll(existing);
+        }
 
         for (var d : days) {
             var b = new StoreBlackout(null, storeId, d, "Owner-set", null);
@@ -152,21 +172,39 @@ public class StoreService {
         }
     }
 
-    /** Utility used by BookingService to reject unavailable dates */
+    /** Core check used by BookingService: date range must be covered by seasons AND not in blackouts. */
     @Transactional(readOnly = true)
-    public boolean isStoreOpenForRange(UUID storeId, LocalDate start, LocalDate end) {
-        // any blackout in range?
-        if (!blackouts.findByStoreIdAndDayBetween(storeId, start, end).isEmpty()) return false;
+    public boolean isOpenAccordingToSeasons(UUID storeId, LocalDate start, LocalDate end) {
+        // If no seasons defined, treat as open (only blackouts apply)
+        var storeSeasons = seasons.findByStoreId(storeId);
+        if (storeSeasons.isEmpty()) {
+            return blackouts.findByStoreIdAndDateBetween(storeId, start, end).isEmpty();
+        }
 
-        // optional weekly rule: if weekly table has rows, treat NOT listed days as closed
-        var weekly = weeklyOpen.findByStoreId(storeId);
-        if (!weekly.isEmpty()) {
-            var openSet = weekly.stream().filter(StoreWeeklyOpen::isOpen)
-                    .map(StoreWeeklyOpen::getDayOfWeek).collect(java.util.stream.Collectors.toSet());
-            for (var d = start; !d.isAfter(end); d = d.plusDays(1)) {
-                int dow = d.getDayOfWeek().getValue(); // 1..7
-                if (!openSet.contains(dow)) return false;
+        // Gather blackouts in range for quick lookup
+        var blackoutDays = new HashSet<>(
+                blackouts.findByStoreIdAndDateBetween(storeId, start, end).stream()
+                        .map(StoreBlackout::getDate).toList()
+        );
+
+        for (var d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            if (blackoutDays.contains(d)) return false;
+
+            boolean covered = false;
+            int isoDow = d.getDayOfWeek().getValue(); // 1..7
+
+            for (var s : storeSeasons) {
+                // date must be within the season window
+                if (d.isBefore(s.getStartDate()) || d.isAfter(s.getEndDate())) continue;
+
+                // weekday must be allowed if a whitelist is provided
+                var ow = s.getOpenWeekdays(); // List<Integer> (empty => all weekdays allowed)
+                if (ow != null && !ow.isEmpty() && !ow.contains(isoDow)) continue;
+
+                covered = true;
+                break;
             }
+            if (!covered) return false; // this day not allowed by any season
         }
         return true;
     }
@@ -174,21 +212,34 @@ public class StoreService {
     @Transactional(readOnly = true)
     public List<SeasonDTO> listSeasons(UUID storeId) {
         return seasons.findByStoreId(storeId).stream()
-                .map(s -> new SeasonDTO(s.getId(), s.getStartDate(), s.getEndDate(), s.getOpenWeekdays(), s.getNote()))
+                .map(s -> new SeasonDTO(
+                        s.getId(),
+                        s.getStartDate(),
+                        s.getEndDate(),
+                        s.getOpenWeekdays(),   // List<Integer>
+                        s.getNote()
+                ))
                 .toList();
     }
 
     @Transactional
-    public SeasonDTO addSeason(UUID storeId, LocalDate start, LocalDate end, int[] openWeekdays, String note, Authentication auth) {
+    public SeasonDTO addSeason(UUID storeId,
+                               LocalDate start,
+                               LocalDate end,
+                               List<Integer> openWeekdays,
+                               String note,
+                               Authentication auth) {
         var userId = authUtils.currentUserId(auth);
         var store = stores.findById(storeId).orElseThrow();
         if (!store.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+
         var s = new StoreOpenSeason();
         s.setStoreId(storeId);
         s.setStartDate(start);
         s.setEndDate(end);
-        s.setOpenWeekdays(openWeekdays);
+        s.setOpenWeekdays(openWeekdays);  // <-- setter writes CSV internally
         s.setNote(note);
+
         s = seasons.save(s);
         return new SeasonDTO(s.getId(), s.getStartDate(), s.getEndDate(), s.getOpenWeekdays(), s.getNote());
     }
@@ -198,45 +249,9 @@ public class StoreService {
         var userId = authUtils.currentUserId(auth);
         var store = stores.findById(storeId).orElseThrow();
         if (!store.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+
         var s = seasons.findById(seasonId).orElseThrow();
         if (!s.getStoreId().equals(storeId)) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         seasons.delete(s);
     }
-
-    /** Core check used by BookingService: date range must be inside at least one season AND not in blackouts. */
-    @Transactional(readOnly = true)
-    public boolean isOpenAccordingToSeasons(UUID storeId, LocalDate start, LocalDate end) {
-        // If no seasons defined, treat as open (only blackouts apply)
-        var storeSeasons = seasons.findByStoreId(storeId);
-        if (storeSeasons.isEmpty()) {
-            return blackouts.findByStoreIdAndDayBetween(storeId, start, end).isEmpty();
-        }
-
-        // Each day must be covered by at least one season && weekday allowed && not blacked out
-        var blackoutDays = new java.util.HashSet<LocalDate>(
-                blackouts.findByStoreIdAndDayBetween(storeId, start, end).stream().map(b -> b.getDay()).toList()
-        );
-
-        for (var d = start; !d.isAfter(end); d = d.plusDays(1)) {
-            if (blackoutDays.contains(d)) return false;
-
-            boolean covered = false;
-            int isoDow = d.getDayOfWeek().getValue(); // 1..7
-            for (var s : storeSeasons) {
-                if ((d.isAfter(s.getEndDate()) || d.isBefore(s.getStartDate()))) continue;
-                int[] ow = s.getOpenWeekdays();
-                if (ow != null && ow.length > 0) {
-                    // must be in the allowed weekdays
-                    boolean allowedDow = java.util.Arrays.stream(ow).anyMatch(v -> v == isoDow);
-                    if (!allowedDow) continue;
-                }
-                covered = true;
-                break;
-            }
-            if (!covered) return false; // this day not allowed by any season
-        }
-        return true;
-    }
 }
-
-

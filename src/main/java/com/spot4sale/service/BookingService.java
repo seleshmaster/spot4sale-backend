@@ -1,6 +1,7 @@
 package com.spot4sale.service;
 
 import com.spot4sale.dto.BookingDetailsDto;
+import com.spot4sale.dto.CheckAvailabilityResponse;
 import com.spot4sale.dto.SpotSummary;
 import com.spot4sale.dto.StoreSummary;
 import com.spot4sale.entity.Booking;
@@ -79,7 +80,7 @@ public class BookingService {
         }
 
         // after you’ve resolved spot -> storeId
-        if (!storeService.isStoreOpenForRange(spot.getStoreId(), start, end)) {
+        if (!storeService.isOpenAccordingToSeasons(spot.getStoreId(), start, end)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Store is closed on one or more of the selected dates");
         }
@@ -251,6 +252,57 @@ public class BookingService {
             default -> throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot cancel in status: " + b.getStatus());
         }
     }
+
+    // in BookingService.java
+    @Transactional(readOnly = true)
+    public CheckAvailabilityResponse checkAvailability(UUID spotId, LocalDate start, LocalDate end) {
+        if (start == null || end == null || !end.isAfter(start)) {
+            return new CheckAvailabilityResponse(false, "Invalid date range", null);
+        }
+
+        var spot = spots.findById(spotId)
+                .orElse(null);
+        if (spot == null || Boolean.FALSE.equals(spot.getAvailable())) {
+            return new CheckAvailabilityResponse(false, "Spot not available", null);
+        }
+
+        var store = stores.findById(spot.getStoreId())
+                .orElse(null);
+        if (store == null) {
+            return new CheckAvailabilityResponse(false, "Store not found", null);
+        }
+
+        // 1) Business constraints (e.g., 1–2 days)
+        long days = java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1; // inclusive
+        if (days < 1 || days > 2) {
+            return new CheckAvailabilityResponse(false, "Bookings must be 1 or 2 days", null);
+        }
+
+        // 2) Check seasons/blackouts/weekday rules (every day must be open)
+        LocalDate cur = start;
+        while (!cur.isAfter(end)) {
+            if (!storeService.isOpenAccordingToSeasons(store.getId(), start, end)) {
+                return new CheckAvailabilityResponse(false, "Store is closed for one or more days in the range", null);
+            }
+            cur = cur.plusDays(1);
+        }
+
+        // 3) Check overlaps against existing (non-cancelled) bookings for this spot
+        boolean overlaps = bookings.existsOverlapping(spotId, start, end);
+        if (overlaps) {
+            return new CheckAvailabilityResponse(false, "Dates overlap another booking", null);
+        }
+
+        // 4) Compute estimated total
+        var pricePerDay = spot.getPricePerDay() != null
+                ? java.math.BigDecimal.valueOf(spot.getPricePerDay())
+                : java.math.BigDecimal.ZERO;
+        var total = pricePerDay.multiply(java.math.BigDecimal.valueOf(days))
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+
+        return new CheckAvailabilityResponse(true, null, total);
+    }
+
 }
 
 

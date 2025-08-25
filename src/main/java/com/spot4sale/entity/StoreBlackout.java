@@ -10,9 +10,10 @@ import java.util.UUID;
 public class StoreBlackout {
     @Id @GeneratedValue private UUID id;
     @Column(nullable=false) private UUID storeId;
-    @Column(nullable=false) private LocalDate day;
+    @Column(nullable=false, name="day") private LocalDate date;
     private String reason;
     @Column(nullable=false) private OffsetDateTime createdAt = OffsetDateTime.now();
+
 }
 
 

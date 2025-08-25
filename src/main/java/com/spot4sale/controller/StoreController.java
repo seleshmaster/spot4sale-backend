@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/stores")
@@ -101,7 +102,9 @@ public class StoreController {
     @PreAuthorize("hasAnyRole('STORE_OWNER')")
     @PostMapping("/{storeId}/availability/seasons")
     public SeasonDTO addSeason(@PathVariable UUID storeId, @RequestBody @Valid CreateSeasonRequest r, Authentication auth) {
-        return storeService.addSeason(storeId, r.startDate(), r.endDate(), r.openWeekdays(), r.note(), auth);
+        return storeService.addSeason(storeId, r.startDate(), r.endDate(), Arrays.stream(r.openWeekdays()) // Create an IntStream from the int array
+                .boxed()
+                .collect(Collectors.toList()), r.note(), auth);
     }
 
     @PreAuthorize("hasAnyRole('STORE_OWNER')")

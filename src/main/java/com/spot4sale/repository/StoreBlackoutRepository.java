@@ -6,7 +6,8 @@ import java.time.LocalDate;
 import java.util.*;
 
 public interface StoreBlackoutRepository extends JpaRepository<StoreBlackout, UUID> {
-    List<StoreBlackout> findByStoreIdAndDayBetween(UUID storeId, LocalDate from, LocalDate to);
-    boolean existsByStoreIdAndDay(UUID storeId, LocalDate day);
+    List<StoreBlackout> findByStoreIdAndDateBetween(UUID storeId, LocalDate from, LocalDate to);
+    // boolean existsByStoreIdAndDate(UUID storeId, LocalDate date);
 }
+
 

@@ -6,28 +6,27 @@ import com.spot4sale.entity.Spot;
 import com.spot4sale.entity.Store;
 import com.spot4sale.entity.User;
 import com.spot4sale.repository.SpotRepository;
+import com.spot4sale.repository.StoreOpenSeasonRepository;
 import com.spot4sale.repository.StoreRepository;
 import com.spot4sale.repository.UserRepository;
 import com.spot4sale.service.AuthUtils;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class SpotService {
     private final SpotRepository spots;
     private final StoreRepository stores;
     private final UserRepository users;
 
-    public SpotService(SpotRepository spots, StoreRepository stores, UserRepository users) {
-        this.spots = spots;
-        this.stores = stores;
-        this.users = users;
-    }
 
     public List<Spot> listByStore(UUID storeId) {
         Store store = stores.findById(storeId)
@@ -73,5 +72,12 @@ public class SpotService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your store");
         }
         spots.deleteById(spotId);
+    }
+
+    public Spot getSpot(UUID spotId, Authentication auth) {
+        User owner = AuthUtils.requireUser(users, auth);
+        Spot s = spots.findById(spotId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Spot not found"));
+        return s;
     }
 }
