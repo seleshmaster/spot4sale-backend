@@ -26,6 +26,7 @@ public class StoreService {
     private final SpotRepository spots;
     private final UserRepository users;
     private final AuthUtils authUtils;
+    private final GeocodingService geocodingService;
 
     // Repos used for availability/calendar
     private final StoreBlackoutRepository blackouts;            // expect: findByStoreIdAndDateBetween(...)
@@ -37,9 +38,20 @@ public class StoreService {
     public Store createStore(@Valid CreateStoreRequest r, Authentication auth) {
         UUID ownerId = authUtils.currentUserId(auth);
 
+        // Build address string for geocoding
+        String fullAddress = String.format("%s, %s, %s", r.address(), r.city(), r.zipCode());
+
+        // Fetch coordinates asynchronously
+        GeocodingService.LatLon latLon;
+        try {
+            latLon = geocodingService.fetchLatLon(fullAddress).get(); // wait for result
+        } catch (Exception e) {
+            latLon = new GeocodingService.LatLon(0, 0); // fallback if Google fails
+        }
+
         Store s = new Store(
                 null, ownerId, r.name(), r.description(), r.address(),
-                r.city(), r.zipCode(), r.latitude(), r.longitude(),
+                r.city(), r.zipCode(), latLon.lat(), latLon.lon(),
                 r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : 24
         );
 
@@ -254,4 +266,50 @@ public class StoreService {
         if (!s.getStoreId().equals(storeId)) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         seasons.delete(s);
     }
+
+    @Transactional
+    public Store updateStore(UUID storeId, @Valid CreateStoreRequest r, Authentication auth) {
+        UUID userId = authUtils.currentUserId(auth);
+        Store store = stores.findById(storeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
+
+        if (!store.getOwnerId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your store");
+        }
+
+        // Update fields
+        store.setName(r.name());
+        store.setDescription(r.description());
+        store.setAddress(r.address());
+        store.setCity(r.city());
+        store.setZipCode(r.zipCode());
+        store.setLatitude(r.latitude() != null ? r.latitude() : store.getLatitude());
+        store.setLongitude(r.longitude() != null ? r.longitude() : store.getLongitude());
+        store.setCancellationCutoffHours(r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : store.getCancellationCutoffHours());
+
+        return stores.save(store);
+    }
+
+    @Transactional
+    public void deleteStore(UUID storeId, Authentication auth) {
+        UUID userId = authUtils.currentUserId(auth);
+        Store store = stores.findById(storeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
+
+        if (!store.getOwnerId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your store");
+        }
+
+        // Optional: delete spots associated with this store
+        var storeSpots = spots.findByStoreId(storeId);
+        spots.deleteAll(storeSpots);
+
+        // delete seasons and blackouts
+        seasons.findByStoreId(storeId).forEach(seasons::delete);
+        blackouts.findByStoreId(storeId)
+                .forEach(blackouts::delete);
+
+        stores.delete(store);
+    }
+
 }

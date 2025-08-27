@@ -114,4 +114,18 @@ public class StoreController {
         storeService.deleteSeason(storeId, seasonId, auth);
     }
 
+    @PutMapping("/{storeId}")
+    public Store updateStore(@PathVariable UUID storeId,
+                             @Valid @RequestBody CreateStoreRequest request,
+                             Authentication auth) {
+        return storeService.updateStore(storeId, request, auth);
+    }
+
+    @DeleteMapping("/{storeId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteStore(@PathVariable UUID storeId, Authentication auth) {
+        storeService.deleteStore(storeId, auth);
+    }
+
+
 }
