@@ -102,9 +102,18 @@ public class StoreController {
     @PreAuthorize("hasAnyRole('STORE_OWNER')")
     @PostMapping("/{storeId}/availability/seasons")
     public SeasonDTO addSeason(@PathVariable UUID storeId, @RequestBody @Valid CreateSeasonRequest r, Authentication auth) {
-        return storeService.addSeason(storeId, r.startDate(), r.endDate(), Arrays.stream(r.openWeekdays()) // Create an IntStream from the int array
-                .boxed()
-                .collect(Collectors.toList()), r.note(), auth);
+        return storeService.addSeason(
+                storeId,
+                r.startDate(),
+                r.endDate(),
+                r.openWeekdays() != null
+                        ? Arrays.stream(r.openWeekdays())  // Convert int[] to IntStream
+                        .boxed()                   // Box int to Integer
+                        .collect(Collectors.toList())
+                        : Collections.emptyList(),        // If null, pass empty list
+                r.note(),
+                auth
+        );
     }
 
     @PreAuthorize("hasAnyRole('STORE_OWNER')")
