@@ -9,11 +9,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -95,5 +98,54 @@ public class AuthUtils {
                 role,
                 authorities
         );
+    }
+
+    /** Fetch or create the user, refresh role if necessary */
+    @Transactional
+    public MeResponse getCurrentUser(Authentication auth) {
+
+        if (!(auth instanceof OAuth2AuthenticationToken)) {
+            throw new IllegalArgumentException("Authentication is not OAuth2AuthenticationToken");
+        }
+
+        OAuth2AuthenticationToken token = (OAuth2AuthenticationToken) auth;
+        Map<String, Object> attributes = token.getPrincipal().getAttributes();
+
+        // Step 1: Extract email from OAuth token
+        String email = (String) attributes.getOrDefault("email", null);
+        String name = (String) attributes.getOrDefault("name", "unknown");
+
+        if (email == null) {
+            // fallback if no email from OAuth
+            email = "unknown";
+        }
+        // Try to find the user in DB
+        User me = users.findByEmail(email)
+                .orElseGet(() -> createUserFromOidc(auth)); // create if not exists
+
+        // Convert authorities from Authentication to List<String>
+        List<String> authorities = auth.getAuthorities()
+                .stream()
+                .map(a -> a.getAuthority())
+                .toList();
+
+        // Return DTO for frontend
+        return new MeResponse(
+                me.getName(),
+                me.getEmail(),
+                me.getRole(),
+                authorities
+        );
+    }
+
+
+    /** Create new user from OIDC authentication */
+    private User createUserFromOidc(Authentication auth) {
+        User u = new User();
+        u.setEmail(auth.getName()); // use principal email
+        u.setName(auth.getName());  // or get from claims
+        u.setRole("USER");
+        // add default authorities if needed
+        return users.save(u);
     }
 }

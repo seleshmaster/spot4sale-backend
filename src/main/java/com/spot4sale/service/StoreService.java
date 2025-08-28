@@ -288,6 +288,7 @@ public class StoreService {
         store.setLatitude(r.latitude() != null ? r.latitude() : store.getLatitude());
         store.setLongitude(r.longitude() != null ? r.longitude() : store.getLongitude());
         store.setCancellationCutoffHours(r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : store.getCancellationCutoffHours());
+        store.setImages( r.images() != null ? r.images().toArray(new String[0]) : null);
 
         return stores.save(store);
     }
