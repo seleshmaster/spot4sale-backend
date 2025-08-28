@@ -49,10 +49,12 @@ public class StoreService {
             latLon = new GeocodingService.LatLon(0, 0); // fallback if Google fails
         }
 
+
         Store s = new Store(
                 null, ownerId, r.name(), r.description(), r.address(),
                 r.city(), r.zipCode(), latLon.lat(), latLon.lon(),
-                r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : 24
+                r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : 24,
+                r.images() != null ? r.images().toArray(new String[0]) : null
         );
 
         Store saved = stores.save(s);

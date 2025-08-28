@@ -2,6 +2,8 @@ package com.spot4sale.dto;
 
 import jakarta.validation.constraints.*;
 
+import java.util.List;
+
 public record CreateStoreRequest(
         @NotBlank @Size(max = 120) String name,
         @Size(max = 2000) String description,
@@ -13,5 +15,6 @@ public record CreateStoreRequest(
         ) String zipCode,
         @NotNull @DecimalMin(value = "-90.0")  @DecimalMax(value = "90.0")  Double latitude,
         @NotNull @DecimalMin(value = "-180.0") @DecimalMax(value = "180.0") Double longitude,
-        Integer cancellationCutoffHours // nullable; defaulted in service
+        Integer cancellationCutoffHours, // nullable; defaulted in service
+        List<String> images
 ) {}
