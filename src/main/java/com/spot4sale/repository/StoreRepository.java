@@ -22,6 +22,7 @@ public interface StoreRepository extends JpaRepository<Store, java.util.UUID> {
         SELECT
           s.id                         AS id,
           s.name                       AS name,
+          s.address                    AS address,
           s.city                       AS city,
           s.zip_code                   AS zipCode,
           s.latitude                   AS latitude,
@@ -41,7 +42,7 @@ public interface StoreRepository extends JpaRepository<Store, java.util.UUID> {
         ORDER BY distanceMeters
         LIMIT :limit OFFSET :offset
         """, nativeQuery = true)
-    public List<StoreNearbyDTO> searchNearby(
+    List<StoreNearbyDTO> searchNearby(
             @Param("lat") double lat,
             @Param("lon") double lon,
             @Param("radiusMeters") double radiusMeters,

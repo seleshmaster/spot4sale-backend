@@ -1,15 +1,14 @@
-
 package com.spot4sale.dto;
 
 import java.util.UUID;
 
-public record StoreNearbyDTO(
-  UUID id,
-  String name,
-  String address,
-  String city,
-  String zipCode,
-  Double latitude,
-  Double longitude,
-  Double distanceMeters
-) {}
+public interface StoreNearbyDTO {
+    UUID getId();
+    String getName();
+    String getAddress();
+    String getCity();
+    String getZipCode();
+    Double getLatitude();
+    Double getLongitude();
+    Double getDistanceMeters();
+}
