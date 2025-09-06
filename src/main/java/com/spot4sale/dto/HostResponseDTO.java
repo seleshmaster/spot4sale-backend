@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-public record StoreResponseDTO(
+public record HostResponseDTO(
         UUID id,
         String name,
         String description,
@@ -23,7 +23,7 @@ public record StoreResponseDTO(
         Map<String, Object> characteristics
 ) {
 
-    public static StoreResponseDTO from(Host store) {
+    public static HostResponseDTO from(Host store) {
 
         Map<String, Object> charMap = null;
 
@@ -40,7 +40,7 @@ public record StoreResponseDTO(
         }
         List<String> images = store.getImages() != null ? Arrays.asList(store.getImages()) : List.of();
 
-        return new StoreResponseDTO(
+        return new HostResponseDTO(
                 store.getId(),
                 store.getName(),
                 store.getDescription(),

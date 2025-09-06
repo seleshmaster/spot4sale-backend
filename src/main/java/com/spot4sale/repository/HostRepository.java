@@ -1,7 +1,7 @@
 
 package com.spot4sale.repository;
 
-import com.spot4sale.dto.StoreSummaryDTO;
+import com.spot4sale.dto.HostSummaryDTO;
 import com.spot4sale.entity.Host;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -18,7 +18,7 @@ public interface HostRepository extends JpaRepository<Host, java.util.UUID> {
     List<Host> findByOwnerId(UUID ownerId);
 
     @Query("""
-        SELECT new com.spot4sale.dto.StoreSummaryDTO(
+        SELECT new com.spot4sale.dto.HostSummaryDTO(
             s.id,
             s.name,
             s.address,
@@ -34,14 +34,14 @@ public interface HostRepository extends JpaRepository<Host, java.util.UUID> {
         GROUP BY s.id, s.name, s.address, s.city, s.zipCode, s.thumbnail
         ORDER BY s.name
         """)
-    List<StoreSummaryDTO> findStoresByCityOrZip(
+    List<HostSummaryDTO> findStoresByCityOrZip(
             @Param("city") String city,
             @Param("zip") String zip
     );
 
 
     @Query("""
-        SELECT new com.spot4sale.dto.StoreSummaryDTO(
+        SELECT new com.spot4sale.dto.HostSummaryDTO(
             s.id,
             s.name,
             s.address,
@@ -56,7 +56,7 @@ public interface HostRepository extends JpaRepository<Host, java.util.UUID> {
           AND (:zip IS NULL OR s.zipCode = :zip)
         GROUP BY s.id
     """)
-    List<StoreSummaryDTO> searchByCityOrZip(
+    List<HostSummaryDTO> searchByCityOrZip(
             @Param("city") String city,
             @Param("zip") String zip
 
@@ -91,7 +91,7 @@ public interface HostRepository extends JpaRepository<Host, java.util.UUID> {
         ORDER BY "distanceMeters"
         LIMIT :limit OFFSET :offset
         """, nativeQuery = true)
-    List<StoreSummaryDTO> searchNearby(
+    List<HostSummaryDTO> searchNearby(
             @Param("lat") double lat,
             @Param("lon") double lon,
             @Param("radiusMeters") double radiusMeters,

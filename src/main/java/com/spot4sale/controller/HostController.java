@@ -35,8 +35,8 @@ public class HostController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<StoreResponseDTO> getStore(@PathVariable UUID id) {
-        StoreResponseDTO dto = storeService.get(id);
+    public ResponseEntity<HostResponseDTO> getStore(@PathVariable UUID id) {
+        HostResponseDTO dto = storeService.get(id);
         if (dto == null) {
             return ResponseEntity.notFound().build();
         }
@@ -70,17 +70,17 @@ public class HostController {
 //    }
 
     @GetMapping("/search/nearby")
-    public List<StoreSummaryDTO> nearby(@RequestParam double lat,
-                                        @RequestParam double lon,
-                                        @RequestParam(defaultValue = "5000") double radiusMeters,
-                                        @RequestParam(defaultValue = "20") int limit,
-                                        @RequestParam(defaultValue = "0") int offset) {
+    public List<HostSummaryDTO> nearby(@RequestParam double lat,
+                                       @RequestParam double lon,
+                                       @RequestParam(defaultValue = "5000") double radiusMeters,
+                                       @RequestParam(defaultValue = "20") int limit,
+                                       @RequestParam(defaultValue = "0") int offset) {
         return storeService.searchNearby(lat, lon, radiusMeters, limit, offset);
 
     }
 
     @GetMapping(value = "/search", produces = MediaType.APPLICATION_JSON_VALUE)
-    public List<StoreSummaryDTO> search(
+    public List<HostSummaryDTO> search(
             @RequestParam(required = false) String zip,
             @RequestParam(required = false) String city,
             @RequestParam(defaultValue = "0") int page,

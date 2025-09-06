@@ -107,14 +107,14 @@ public class HostService {
     /* ---------- Queries ---------- */
 
     @Transactional(readOnly = true)
-    public StoreResponseDTO get(UUID id) {
+    public HostResponseDTO get(UUID id) {
         return hostRepository.findById(id)
-                .map(StoreResponseDTO::from)
+                .map(HostResponseDTO::from)
                 .orElse(null); // return null if store not found
     }
 
     @Transactional(readOnly = true)
-    public List<StoreSummaryDTO> search(String zip, String city) {
+    public List<HostSummaryDTO> search(String zip, String city) {
         return hostRepository.findStoresByCityOrZip(zip,  city);
     }
 
@@ -124,11 +124,11 @@ public class HostService {
     }
 
     @Transactional(readOnly = true)
-    public List<StoreSummaryDTO> searchNearby(double lat, double lon, double radiusMeters, int limit, int offset) {
+    public List<HostSummaryDTO> searchNearby(double lat, double lon, double radiusMeters, int limit, int offset) {
         return hostRepository.searchNearby(lat, lon, radiusMeters, limit, offset);
     }
 
-    public List<StoreSummaryDTO> search(String zip, String city, Pageable pageable) {
+    public List<HostSummaryDTO> search(String zip, String city, Pageable pageable) {
        return hostRepository.searchByCityOrZip(zip, city);
     }
 

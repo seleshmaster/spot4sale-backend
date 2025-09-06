@@ -3,7 +3,7 @@ package com.spot4sale.service;
 import com.spot4sale.dto.BookingDetailsDto;
 import com.spot4sale.dto.CheckAvailabilityResponse;
 import com.spot4sale.dto.BoothSummary;
-import com.spot4sale.dto.StoreSummaryDTO;
+import com.spot4sale.dto.HostSummaryDTO;
 import com.spot4sale.entity.*;
 import com.spot4sale.repository.*;
 import com.stripe.exception.StripeException;
@@ -151,7 +151,7 @@ public class BookingService {
                         .average()
                         .orElse(0.0);
 
-        StoreSummaryDTO storeDto = new StoreSummaryDTO(st.getId(), st.getName(), st.getAddress(),
+        HostSummaryDTO storeDto = new HostSummaryDTO(st.getId(), st.getName(), st.getAddress(),
                 st.getCity(), st.getZipCode(), st.getThumbnail(), avgRating);
         BoothSummary spotDto  = new BoothSummary(sp.getId(), sp.getStoreId(), sp.getPricePerDay(), sp.getAvailable());
 
