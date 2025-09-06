@@ -1,6 +1,8 @@
 // src/main/java/com/spot4sale/service/StoreService.java
 package com.spot4sale.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spot4sale.dto.*;
 import com.spot4sale.entity.*;
 import com.spot4sale.repository.*;
@@ -8,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -22,11 +25,12 @@ import java.util.*;
 @RequiredArgsConstructor
 public class StoreService {
 
-    private final StoreRepository stores;
+    private final StoreRepository storeRepository;
     private final SpotRepository spots;
     private final UserRepository users;
     private final AuthUtils authUtils;
     private final GeocodingService geocodingService;
+    private final ObjectMapper objectMapper;
 
     // Repos used for availability/calendar
     private final StoreBlackoutRepository blackouts;            // expect: findByStoreIdAndDateBetween(...)
@@ -49,15 +53,31 @@ public class StoreService {
             latLon = new GeocodingService.LatLon(0, 0); // fallback if Google fails
         }
 
+        // Create store entity
+        Store s = new Store();
+        s.setId(null);
+        s.setOwnerId(ownerId);
+        s.setName(r.name());
+        s.setDescription(r.description());
+        s.setAddress(r.address());
+        s.setCity(r.city());
+        s.setZipCode(r.zipCode());
+        s.setLatitude(latLon.lat());
+        s.setLongitude(latLon.lon());
+        s.setCancellationCutoffHours(r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : 24);
+        s.setImages(r.images() != null ? r.images().toArray(new String[0]) : null);
+        s.setThumbnail(r.thumbnail());
 
-        Store s = new Store(
-                null, ownerId, r.name(), r.description(), r.address(),
-                r.city(), r.zipCode(), latLon.lat(), latLon.lon(),
-                r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : 24,
-                r.images() != null ? r.images().toArray(new String[0]) : null
-        );
+        // Convert characteristics map to JSON string
+        if (r.characteristics() != null) {
+            try {
+                s.setCharacteristics(objectMapper.writeValueAsString(r.characteristics()));
+            } catch (JsonProcessingException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid characteristics JSON", e);
+            }
+        }
 
-        Store saved = stores.save(s);
+        Store saved = storeRepository.save(s);
 
         // Promote the creator to STORE_OWNER if still USER
         User me = users.findById(ownerId)
@@ -66,13 +86,14 @@ public class StoreService {
             me.setRole("STORE_OWNER");
             users.save(me);
         }
+
         return saved;
     }
 
     @Transactional
     public Spot addSpot(UUID storeId, @Valid CreateSpotRequest r, Authentication auth) {
         // Ensure the caller owns the store
-        Store st = stores.findById(storeId)
+        Store st = storeRepository.findById(storeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
         UUID me = authUtils.currentUserId(auth);
         if (!st.getOwnerId().equals(me)) {
@@ -82,33 +103,39 @@ public class StoreService {
         return spots.save(sp);
     }
 
+
     /* ---------- Queries ---------- */
 
     @Transactional(readOnly = true)
-    public Optional<Store> get(UUID id) {
-        return stores.findById(id);
+    public StoreResponseDTO get(UUID id) {
+        return storeRepository.findById(id)
+                .map(StoreResponseDTO::from)
+                .orElse(null); // return null if store not found
     }
 
     @Transactional(readOnly = true)
-    public List<Store> search(String zip, String city) {
-        if (zip != null) return stores.findByZipCode(zip);
-        if (city != null) return stores.findByCityIgnoreCase(city);
-        return stores.findAll();
+    public List<StoreSummaryDTO> search(String zip, String city) {
+        return storeRepository.findStoresByCityOrZip(zip,  city);
     }
 
     @Transactional(readOnly = true)
     public Page<Store> list(int page, int size) {
-        return stores.findAll(PageRequest.of(page, size, Sort.by("name")));
+        return storeRepository.findAll(PageRequest.of(page, size, Sort.by("name")));
     }
 
     @Transactional(readOnly = true)
-    public List<StoreNearbyDTO> searchNearby(double lat, double lon, double radiusMeters, int limit, int offset) {
-        return stores.searchNearby(lat, lon, radiusMeters, limit, offset);
+    public List<StoreSummaryDTO> searchNearby(double lat, double lon, double radiusMeters, int limit, int offset) {
+        return storeRepository.searchNearby(lat, lon, radiusMeters, limit, offset);
     }
+
+    public List<StoreSummaryDTO> search(String zip, String city, Pageable pageable) {
+       return storeRepository.searchByCityOrZip(zip, city);
+    }
+
 
     @Transactional(readOnly = true)
     public Map<String, Object> connectedAccount(UUID storeId, Authentication auth) {
-        Store store = stores.findById(storeId)
+        Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
 
         // Optional: require owner to see payout info
@@ -169,7 +196,7 @@ public class StoreService {
     public void setBlackouts(UUID storeId, List<LocalDate> days, Authentication auth, AuthUtils authUtils) {
         // owner check
         var userId = authUtils.currentUserId(auth);
-        var store = stores.findById(storeId).orElseThrow();
+        var store = storeRepository.findById(storeId).orElseThrow();
         if (!store.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
 
         // upsert MVP: clear existing in that span, then insert all provided
@@ -244,7 +271,7 @@ public class StoreService {
                                String note,
                                Authentication auth) {
         var userId = authUtils.currentUserId(auth);
-        var store = stores.findById(storeId).orElseThrow();
+        var store = storeRepository.findById(storeId).orElseThrow();
         if (!store.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
 
         var s = new StoreOpenSeason();
@@ -261,7 +288,7 @@ public class StoreService {
     @Transactional
     public void deleteSeason(UUID storeId, UUID seasonId, Authentication auth) {
         var userId = authUtils.currentUserId(auth);
-        var store = stores.findById(storeId).orElseThrow();
+        var store = storeRepository.findById(storeId).orElseThrow();
         if (!store.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
 
         var s = seasons.findById(seasonId).orElseThrow();
@@ -272,7 +299,7 @@ public class StoreService {
     @Transactional
     public Store updateStore(UUID storeId, @Valid CreateStoreRequest r, Authentication auth) {
         UUID userId = authUtils.currentUserId(auth);
-        Store store = stores.findById(storeId)
+        Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
 
         if (!store.getOwnerId().equals(userId)) {
@@ -290,13 +317,13 @@ public class StoreService {
         store.setCancellationCutoffHours(r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : store.getCancellationCutoffHours());
         store.setImages( r.images() != null ? r.images().toArray(new String[0]) : null);
 
-        return stores.save(store);
+        return storeRepository.save(store);
     }
 
     @Transactional
     public void deleteStore(UUID storeId, Authentication auth) {
         UUID userId = authUtils.currentUserId(auth);
-        Store store = stores.findById(storeId)
+        Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
 
         if (!store.getOwnerId().equals(userId)) {
@@ -312,7 +339,7 @@ public class StoreService {
         blackouts.findByStoreId(storeId)
                 .forEach(blackouts::delete);
 
-        stores.delete(store);
+        storeRepository.delete(store);
     }
 
 }

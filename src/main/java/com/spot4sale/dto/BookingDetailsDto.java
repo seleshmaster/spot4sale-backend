@@ -12,6 +12,6 @@ public record BookingDetailsDto(
         LocalDate endDate,
         String status,
         BigDecimal totalPrice,
-        StoreSummary store,
+        StoreSummaryDTO store,
         SpotSummary spot
 ) {}

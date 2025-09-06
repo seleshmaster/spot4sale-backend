@@ -9,7 +9,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -34,14 +36,12 @@ public class StoreController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Store> get(@PathVariable UUID id) {
-        return storeService.get(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
-    }
-
-    @GetMapping("/search")
-    public List<Store> search(@RequestParam(required = false) String zip,
-                              @RequestParam(required = false) String city) {
-        return storeService.search(zip, city);
+    public ResponseEntity<StoreResponseDTO> getStore(@PathVariable UUID id) {
+        StoreResponseDTO dto = storeService.get(id);
+        if (dto == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(dto);
     }
 
     @PostMapping("/{storeId}/spots")
@@ -62,14 +62,34 @@ public class StoreController {
         return storeService.list(page, size);
     }
 
+
+
+//    @GetMapping("/search")
+//    public List<StoreSummaryDTO> search(@RequestParam(required = false) String zip,
+//                                        @RequestParam(required = false) String city) {
+//        return storeService.search(zip, city);
+//    }
+
     @GetMapping("/search/nearby")
-    public List<StoreNearbyDTO> nearby(@RequestParam double lat,
-                                       @RequestParam double lon,
-                                       @RequestParam(defaultValue = "5000") double radiusMeters,
-                                       @RequestParam(defaultValue = "20") int limit,
-                                       @RequestParam(defaultValue = "0") int offset) {
+    public List<StoreSummaryDTO> nearby(@RequestParam double lat,
+                                        @RequestParam double lon,
+                                        @RequestParam(defaultValue = "5000") double radiusMeters,
+                                        @RequestParam(defaultValue = "20") int limit,
+                                        @RequestParam(defaultValue = "0") int offset) {
         return storeService.searchNearby(lat, lon, radiusMeters, limit, offset);
+
     }
+
+    @GetMapping(value = "/search", produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<StoreSummaryDTO> search(
+            @RequestParam(required = false) String zip,
+            @RequestParam(required = false) String city,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return storeService.search(zip, city, PageRequest.of(page, size));
+    }
+
+
 
     @GetMapping("/{id}/connected-account")
     public Map<String, Object> connectedAccount(@PathVariable UUID id, Authentication auth) {

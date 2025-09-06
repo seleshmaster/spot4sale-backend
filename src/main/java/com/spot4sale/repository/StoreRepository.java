@@ -1,8 +1,12 @@
 
 package com.spot4sale.repository;
 
+import com.spot4sale.dto.PagedResponse;
 import com.spot4sale.dto.StoreNearbyDTO;
+import com.spot4sale.dto.StoreSummaryDTO;
 import com.spot4sale.entity.Store;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -17,32 +21,81 @@ public interface StoreRepository extends JpaRepository<Store, java.util.UUID> {
 
     List<Store> findByOwnerId(UUID ownerId);
 
+    @Query("""
+        SELECT new com.spot4sale.dto.StoreSummaryDTO(
+            s.id,
+            s.name,
+            s.address,
+            s.city,
+            s.zipCode,
+            s.thumbnail,
+            COALESCE(AVG(r.rating), 0)
+        )
+        FROM Store s
+        LEFT JOIN Review r ON r.targetId = s.id
+        WHERE (:city IS NULL OR s.city = :city)
+          AND (:zip IS NULL OR s.zipCode = :zip)
+        GROUP BY s.id, s.name, s.address, s.city, s.zipCode, s.thumbnail
+        ORDER BY s.name
+        """)
+    List<StoreSummaryDTO> findStoresByCityOrZip(
+            @Param("city") String city,
+            @Param("zip") String zip
+    );
+
+
+    @Query("""
+        SELECT new com.spot4sale.dto.StoreSummaryDTO(
+            s.id,
+            s.name,
+            s.address,
+            s.city,
+            s.zipCode,
+            s.thumbnail,
+            COALESCE(AVG(r.rating), 0)
+        )
+        FROM Store s
+        LEFT JOIN Review r ON r.targetId = s.id
+        WHERE (:city IS NULL OR s.city = :city)
+          AND (:zip IS NULL OR s.zipCode = :zip)
+        GROUP BY s.id
+    """)
+    List<StoreSummaryDTO> searchByCityOrZip(
+            @Param("city") String city,
+            @Param("zip") String zip
+
+    );
+
+
+
 
     @Query(value = """
         SELECT
-          s.id                         AS id,
-          s.name                       AS name,
-          s.address                    AS address,
-          s.city                       AS city,
-          s.zip_code                   AS zipCode,
-          s.latitude                   AS latitude,
-          s.longitude                  AS longitude,
+          s.id,
+          s.name,
+          s.address,
+          s.city,
+          s.zip_code AS "zipCode",
+          s.thumbnail AS "thumbnail",
+          COALESCE(AVG(r.rating), 0) AS "averageRating",
           (6371000 * acos(LEAST(1, GREATEST(-1,
               cos(radians(:lat)) * cos(radians(s.latitude)) *
               cos(radians(s.longitude) - radians(:lon)) +
               sin(radians(:lat)) * sin(radians(s.latitude))
-          ))))                         AS distanceMeters
+          )))) AS "distanceMeters"
         FROM store s
+        LEFT JOIN review r ON s.id = r.target_id
         WHERE s.latitude IS NOT NULL AND s.longitude IS NOT NULL
-        AND (6371000 * acos(LEAST(1, GREATEST(-1,
+          AND (6371000 * acos(LEAST(1, GREATEST(-1,
               cos(radians(:lat)) * cos(radians(s.latitude)) *
               cos(radians(s.longitude) - radians(:lon)) +
               sin(radians(:lat)) * sin(radians(s.latitude))
-        )))) <= :radiusMeters
-        ORDER BY distanceMeters
+          )))) <= :radiusMeters
+        GROUP BY s.id, s.name, s.address, s.city, s.zip_code, s.thumbnail, s.latitude, s.longitude
+        ORDER BY "distanceMeters"
         LIMIT :limit OFFSET :offset
         """, nativeQuery = true)
-    List<StoreNearbyDTO> searchNearby(
+    List<StoreSummaryDTO> searchNearby(
             @Param("lat") double lat,
             @Param("lon") double lon,
             @Param("radiusMeters") double radiusMeters,

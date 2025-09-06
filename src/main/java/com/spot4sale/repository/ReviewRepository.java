@@ -6,11 +6,15 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
     // Fetch reviews for a specific store or seller
+    Optional<List<Review>> findByTargetId(UUID id);
+
     Page<Review> findByTargetTypeAndTargetId(TargetType targetType, UUID targetId, Pageable pageable);
 
     // Optional: fetch all reviews by a specific reviewer

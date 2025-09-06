@@ -3,15 +3,9 @@ package com.spot4sale.service;
 import com.spot4sale.dto.BookingDetailsDto;
 import com.spot4sale.dto.CheckAvailabilityResponse;
 import com.spot4sale.dto.SpotSummary;
-import com.spot4sale.dto.StoreSummary;
-import com.spot4sale.entity.Booking;
-import com.spot4sale.entity.Spot;
-import com.spot4sale.entity.Store;
-import com.spot4sale.entity.User;
-import com.spot4sale.repository.BookingRepository;
-import com.spot4sale.repository.SpotRepository;
-import com.spot4sale.repository.StoreRepository;
-import com.spot4sale.repository.UserRepository;
+import com.spot4sale.dto.StoreSummaryDTO;
+import com.spot4sale.entity.*;
+import com.spot4sale.repository.*;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Refund;
 import com.stripe.param.RefundCreateParams;
@@ -39,6 +33,7 @@ public class BookingService {
     private final StoreRepository stores;
     private final UserRepository users;
     private final StoreService storeService;
+    private final ReviewRepository reviewRepository;
 
 
 
@@ -149,7 +144,15 @@ public class BookingService {
         Store st = stores.findById(sp.getStoreId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
 
-        StoreSummary storeDto = new StoreSummary(st.getId(), st.getName(), st.getAddress(), st.getCity(), st.getZipCode());
+        List<Review> reviews = reviewRepository.findByTargetId(st.getId()).orElse(null);
+        Double avgRating = reviews.isEmpty() ? null :
+                reviews.stream()
+                        .mapToInt(Review::getRating)
+                        .average()
+                        .orElse(0.0);
+
+        StoreSummaryDTO storeDto = new StoreSummaryDTO(st.getId(), st.getName(), st.getAddress(),
+                st.getCity(), st.getZipCode(), st.getThumbnail(), avgRating);
         SpotSummary spotDto  = new SpotSummary(sp.getId(), sp.getStoreId(), sp.getPricePerDay(), sp.getAvailable());
 
         return new BookingDetailsDto(
