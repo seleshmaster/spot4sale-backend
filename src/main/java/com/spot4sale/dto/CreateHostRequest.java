@@ -5,7 +5,7 @@ import jakarta.validation.constraints.*;
 import java.util.List;
 import java.util.Map;
 
-public record CreateStoreRequest(
+public record CreateHostRequest(
         @NotBlank @Size(max = 120) String name,
         @Size(max = 2000) String description,
         @NotBlank @Size(max = 200) String address,

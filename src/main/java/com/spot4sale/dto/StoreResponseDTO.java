@@ -1,8 +1,7 @@
 package com.spot4sale.dto;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.spot4sale.entity.Store;
+import com.spot4sale.entity.Host;
 
 import java.util.Arrays;
 import java.util.List;
@@ -24,7 +23,7 @@ public record StoreResponseDTO(
         Map<String, Object> characteristics
 ) {
 
-    public static StoreResponseDTO from(Store store) {
+    public static StoreResponseDTO from(Host store) {
 
         Map<String, Object> charMap = null;
 

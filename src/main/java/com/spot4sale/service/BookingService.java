@@ -2,7 +2,7 @@ package com.spot4sale.service;
 
 import com.spot4sale.dto.BookingDetailsDto;
 import com.spot4sale.dto.CheckAvailabilityResponse;
-import com.spot4sale.dto.SpotSummary;
+import com.spot4sale.dto.BoothSummary;
 import com.spot4sale.dto.StoreSummaryDTO;
 import com.spot4sale.entity.*;
 import com.spot4sale.repository.*;
@@ -28,11 +28,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class BookingService {
 
-    private final BookingRepository bookings;
-    private final SpotRepository spots;
-    private final StoreRepository stores;
-    private final UserRepository users;
-    private final StoreService storeService;
+    private final BookingRepository bookingRepository;
+    private final BoothRepository boothRepository;
+    private final HostRepository hostRepository;
+    private final UserRepository userRepository;
+    private final HostService hostService;
     private final ReviewRepository reviewRepository;
 
 
@@ -43,7 +43,7 @@ public class BookingService {
     // backend/src/main/java/com/spot4sale/service/BookingService.java
     @Transactional
     public Booking create(UUID spotId, LocalDate start, LocalDate end, Authentication auth) {
-        User u = AuthUtils.requireUser(users, auth);
+        User u = AuthUtils.requireUser(userRepository, auth);
 
         // 1) Basic date sanity
         if (start == null || end == null || !start.isBefore(end)) {
@@ -62,20 +62,20 @@ public class BookingService {
         }
 
         // 2) Spot exists and is available
-        Spot spot = spots.findById(spotId)
+        Booth spot = boothRepository.findById(spotId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Spot not found"));
         if (spot.getAvailable() == null || !spot.getAvailable()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Spot is not available");
         }
 
         // 3) Quick overlap check before DB constraint (for friendlier error)
-        long overlaps = bookings.countOverlapping(spotId, start, end);
+        long overlaps = bookingRepository.countOverlapping(spotId, start, end);
         if (overlaps > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This spot is already booked for those dates");
         }
 
         // after you’ve resolved spot -> storeId
-        if (!storeService.isOpenAccordingToSeasons(spot.getStoreId(), start, end)) {
+        if (!hostService.isOpenAccordingToSeasons(spot.getStoreId(), start, end)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Store is closed on one or more of the selected dates");
         }
@@ -92,13 +92,13 @@ public class BookingService {
         b.setStatus("PENDING"); // or "PENDING" if you want payment-first
         b.setTotalPrice(total);
 
-        long mine = bookings.countUserOverlap(u.getId(), spotId, start, end);
+        long mine = bookingRepository.countUserOverlap(u.getId(), spotId, start, end);
         if (mine > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "You already have a booking for this spot in that window.");
         }
 
         try {
-            return bookings.saveAndFlush(b); // flush so DB constraint violations throw here
+            return bookingRepository.saveAndFlush(b); // flush so DB constraint violations throw here
         } catch (DataIntegrityViolationException ex) {
             // Catch the EXCLUDE constraint violation (race with another requester)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Another booking just took these dates. Please pick different dates.");
@@ -110,8 +110,8 @@ public class BookingService {
      * Get one booking (must belong to current user).
      */
     public Booking getMine(Authentication auth, UUID bookingId) {
-        User user = AuthUtils.requireUser(users, auth);
-        Booking b = bookings.findById(bookingId)
+        User user = AuthUtils.requireUser(userRepository, auth);
+        Booking b = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
         if (!b.getUserId().equals(user.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your booking");
@@ -123,25 +123,25 @@ public class BookingService {
      * List current user's bookings.
      */
     public List<Booking> listMine(Authentication auth) {
-        User user = AuthUtils.requireUser(users, auth);
-        return bookings.findByUserId(user.getId());
+        User user = AuthUtils.requireUser(userRepository, auth);
+        return bookingRepository.findByUserId(user.getId());
     }
 
 
     public BookingDetailsDto getDetails(UUID bookingId, Authentication auth) {
-        User u = AuthUtils.requireUser(users, auth);
+        User u = AuthUtils.requireUser(userRepository, auth);
 
-        Booking b = bookings.findById(bookingId)
+        Booking b = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
 
         if (!b.getUserId().equals(u.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your booking");
         }
 
-        Spot sp = spots.findById(b.getSpotId())
+        Booth sp = boothRepository.findById(b.getSpotId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Spot not found"));
 
-        Store st = stores.findById(sp.getStoreId())
+        Host st = hostRepository.findById(sp.getStoreId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
 
         List<Review> reviews = reviewRepository.findByTargetId(st.getId()).orElse(null);
@@ -153,7 +153,7 @@ public class BookingService {
 
         StoreSummaryDTO storeDto = new StoreSummaryDTO(st.getId(), st.getName(), st.getAddress(),
                 st.getCity(), st.getZipCode(), st.getThumbnail(), avgRating);
-        SpotSummary spotDto  = new SpotSummary(sp.getId(), sp.getStoreId(), sp.getPricePerDay(), sp.getAvailable());
+        BoothSummary spotDto  = new BoothSummary(sp.getId(), sp.getStoreId(), sp.getPricePerDay(), sp.getAvailable());
 
         return new BookingDetailsDto(
                 b.getId(), b.getUserId(), b.getSpotId(),
@@ -165,13 +165,13 @@ public class BookingService {
 
     // BookingService.java
     public List<Booking> listForUser(Authentication auth) {
-        User u = AuthUtils.requireUser(users, auth);
-        return bookings.findByUserIdOrderByStartDateDesc(u.getId());
+        User u = AuthUtils.requireUser(userRepository, auth);
+        return bookingRepository.findByUserIdOrderByStartDateDesc(u.getId());
     }
 
     @Transactional
     public Booking markPaid(UUID bookingId) {
-        var b = bookings.findById(bookingId)
+        var b = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
 
         // Idempotency: if already PAID/REFUNDED, just return
@@ -183,7 +183,7 @@ public class BookingService {
         if ("PENDING".equals(b.getStatus())) {
             b.setStatus("PAID");
             // b.setPaidAt(Instant.now()); // if you add this column later
-            b = bookings.save(b);
+            b = bookingRepository.save(b);
         }
 
         return b;
@@ -192,8 +192,8 @@ public class BookingService {
 
     @Transactional
     public Booking cancelMyBooking(UUID bookingId, Authentication auth) {
-        User me = AuthUtils.requireUser(users, auth);
-        Booking b = bookings.findById(bookingId)
+        User me = AuthUtils.requireUser(userRepository, auth);
+        Booking b = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
 
         if (!b.getUserId().equals(me.getId())) {
@@ -207,13 +207,13 @@ public class BookingService {
             case "PENDING" -> {
                 b.setStatus("CANCELLED");
                 b.setCancelReason("user_cancelled");
-                return bookings.save(b);
+                return bookingRepository.save(b);
             }
             case "PAID" -> {
                 // Determine the store's cutoff
-                Spot sp = spots.findById(b.getSpotId())
+                Booth sp = boothRepository.findById(b.getSpotId())
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Spot not found"));
-                Store st = stores.findById(sp.getStoreId())
+                Host st = hostRepository.findById(sp.getStoreId())
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
 
                 int cutoffHours = st.getCancellationCutoffHours() != null ? st.getCancellationCutoffHours() : 24;
@@ -241,7 +241,7 @@ public class BookingService {
                         if (r.getAmount() != null) b.setRefundAmountCents(BigDecimal.valueOf(r.getAmount().longValue()));
                         b.setStatus("REFUNDED");
                         b.setCancelReason("user_cancelled_before_cutoff");
-                        return bookings.save(b);
+                        return bookingRepository.save(b);
                     } catch (StripeException se) {
                         throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Stripe refund failed: " + se.getMessage());
                     }
@@ -249,7 +249,7 @@ public class BookingService {
                     // after cutoff: cancel, no refund
                     b.setStatus("CANCELLED");
                     b.setCancelReason("user_cancelled_after_cutoff");
-                    return bookings.save(b);
+                    return bookingRepository.save(b);
                 }
             }
             default -> throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot cancel in status: " + b.getStatus());
@@ -263,13 +263,13 @@ public class BookingService {
             return new CheckAvailabilityResponse(false, "Invalid date range", null);
         }
 
-        var spot = spots.findById(spotId)
+        var spot = boothRepository.findById(spotId)
                 .orElse(null);
         if (spot == null || Boolean.FALSE.equals(spot.getAvailable())) {
             return new CheckAvailabilityResponse(false, "Spot not available", null);
         }
 
-        var store = stores.findById(spot.getStoreId())
+        var store = hostRepository.findById(spot.getStoreId())
                 .orElse(null);
         if (store == null) {
             return new CheckAvailabilityResponse(false, "Store not found", null);
@@ -284,14 +284,14 @@ public class BookingService {
         // 2) Check seasons/blackouts/weekday rules (every day must be open)
         LocalDate cur = start;
         while (!cur.isAfter(end)) {
-            if (!storeService.isOpenAccordingToSeasons(store.getId(), start, end)) {
+            if (!hostService.isOpenAccordingToSeasons(store.getId(), start, end)) {
                 return new CheckAvailabilityResponse(false, "Store is closed for one or more days in the range", null);
             }
             cur = cur.plusDays(1);
         }
 
         // 3) Check overlaps against existing (non-cancelled) bookings for this spot
-        boolean overlaps = bookings.existsOverlapping(spotId, start, end);
+        boolean overlaps = bookingRepository.existsOverlapping(spotId, start, end);
         if (overlaps) {
             return new CheckAvailabilityResponse(false, "Dates overlap another booking", null);
         }

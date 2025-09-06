@@ -23,23 +23,23 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
-public class StoreService {
+public class HostService {
 
-    private final StoreRepository storeRepository;
-    private final SpotRepository spots;
-    private final UserRepository users;
+    private final HostRepository hostRepository;
+    private final BoothRepository boothRepository;
+    private final UserRepository userRepository;
     private final AuthUtils authUtils;
     private final GeocodingService geocodingService;
     private final ObjectMapper objectMapper;
 
     // Repos used for availability/calendar
-    private final StoreBlackoutRepository blackouts;            // expect: findByStoreIdAndDateBetween(...)
-    private final StoreOpenSeasonRepository seasons;            // expect: findByStoreId(...)
+    private final HostBlackoutRepository blackouts;            // expect: findByStoreIdAndDateBetween(...)
+    private final HostOpenSeasonRepository seasons;            // expect: findByStoreId(...)
 
     /* ---------- Commands ---------- */
 
     @Transactional
-    public Store createStore(@Valid CreateStoreRequest r, Authentication auth) {
+    public Host createStore(@Valid CreateHostRequest r, Authentication auth) {
         UUID ownerId = authUtils.currentUserId(auth);
 
         // Build address string for geocoding
@@ -54,7 +54,7 @@ public class StoreService {
         }
 
         // Create store entity
-        Store s = new Store();
+        Host s = new Host();
         s.setId(null);
         s.setOwnerId(ownerId);
         s.setName(r.name());
@@ -77,30 +77,30 @@ public class StoreService {
             }
         }
 
-        Store saved = storeRepository.save(s);
+        Host saved = hostRepository.save(s);
 
         // Promote the creator to STORE_OWNER if still USER
-        User me = users.findById(ownerId)
+        User me = userRepository.findById(ownerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         if (!"STORE_OWNER".equalsIgnoreCase(me.getRole())) {
             me.setRole("STORE_OWNER");
-            users.save(me);
+            userRepository.save(me);
         }
 
         return saved;
     }
 
     @Transactional
-    public Spot addSpot(UUID storeId, @Valid CreateSpotRequest r, Authentication auth) {
+    public Booth addSpot(UUID storeId, @Valid CreateBoothRequest r, Authentication auth) {
         // Ensure the caller owns the store
-        Store st = storeRepository.findById(storeId)
+        Host host = hostRepository.findById(storeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
         UUID me = authUtils.currentUserId(auth);
-        if (!st.getOwnerId().equals(me)) {
+        if (!host.getOwnerId().equals(me)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your store");
         }
-        Spot sp = new Spot(null, storeId, r.pricePerDay(), r.available() != null ? r.available() : true);
-        return spots.save(sp);
+        Booth sp = new Booth(null, storeId, r.pricePerDay(), r.available() != null ? r.available() : true);
+        return boothRepository.save(sp);
     }
 
 
@@ -108,34 +108,34 @@ public class StoreService {
 
     @Transactional(readOnly = true)
     public StoreResponseDTO get(UUID id) {
-        return storeRepository.findById(id)
+        return hostRepository.findById(id)
                 .map(StoreResponseDTO::from)
                 .orElse(null); // return null if store not found
     }
 
     @Transactional(readOnly = true)
     public List<StoreSummaryDTO> search(String zip, String city) {
-        return storeRepository.findStoresByCityOrZip(zip,  city);
+        return hostRepository.findStoresByCityOrZip(zip,  city);
     }
 
     @Transactional(readOnly = true)
-    public Page<Store> list(int page, int size) {
-        return storeRepository.findAll(PageRequest.of(page, size, Sort.by("name")));
+    public Page<Host> list(int page, int size) {
+        return hostRepository.findAll(PageRequest.of(page, size, Sort.by("name")));
     }
 
     @Transactional(readOnly = true)
     public List<StoreSummaryDTO> searchNearby(double lat, double lon, double radiusMeters, int limit, int offset) {
-        return storeRepository.searchNearby(lat, lon, radiusMeters, limit, offset);
+        return hostRepository.searchNearby(lat, lon, radiusMeters, limit, offset);
     }
 
     public List<StoreSummaryDTO> search(String zip, String city, Pageable pageable) {
-       return storeRepository.searchByCityOrZip(zip, city);
+       return hostRepository.searchByCityOrZip(zip, city);
     }
 
 
     @Transactional(readOnly = true)
     public Map<String, Object> connectedAccount(UUID storeId, Authentication auth) {
-        Store store = storeRepository.findById(storeId)
+        Host store = hostRepository.findById(storeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
 
         // Optional: require owner to see payout info
@@ -144,7 +144,7 @@ public class StoreService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your store");
         }
 
-        User owner = users.findById(store.getOwnerId())
+        User owner = userRepository.findById(store.getOwnerId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Owner not found"));
 
         String acct = owner.getStripeAccountId();
@@ -157,8 +157,8 @@ public class StoreService {
     }
 
     @Transactional(readOnly = true)
-    public List<Spot> listSpots(UUID storeId) {
-        return spots.findByStoreId(storeId);
+    public List<Booth> listSpots(UUID storeId) {
+        return boothRepository.findByStoreId(storeId);
     }
 
     /**
@@ -171,7 +171,7 @@ public class StoreService {
     public AvailabilityRangeDTO getAvailability(UUID storeId, LocalDate from, LocalDate to) {
         // blackouts in range
         var bs = blackouts.findByStoreIdAndDateBetween(storeId, from, to);
-        var blackoutDays = bs.stream().map(StoreBlackout::getDate).toList();
+        var blackoutDays = bs.stream().map(HostBlackout::getDate).toList();
 
         // seasons that overlap the requested range
         // (assumes repo has findByStoreId; we filter overlaps in memory)
@@ -196,7 +196,7 @@ public class StoreService {
     public void setBlackouts(UUID storeId, List<LocalDate> days, Authentication auth, AuthUtils authUtils) {
         // owner check
         var userId = authUtils.currentUserId(auth);
-        var store = storeRepository.findById(storeId).orElseThrow();
+        var store = hostRepository.findById(storeId).orElseThrow();
         if (!store.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
 
         // upsert MVP: clear existing in that span, then insert all provided
@@ -208,7 +208,7 @@ public class StoreService {
         }
 
         for (var d : days) {
-            var b = new StoreBlackout(null, storeId, d, "Owner-set", null);
+            var b = new HostBlackout(null, storeId, d, "Owner-set", null);
             blackouts.save(b);
         }
     }
@@ -225,7 +225,7 @@ public class StoreService {
         // Gather blackouts in range for quick lookup
         var blackoutDays = new HashSet<>(
                 blackouts.findByStoreIdAndDateBetween(storeId, start, end).stream()
-                        .map(StoreBlackout::getDate).toList()
+                        .map(HostBlackout::getDate).toList()
         );
 
         for (var d = start; !d.isAfter(end); d = d.plusDays(1)) {
@@ -271,10 +271,10 @@ public class StoreService {
                                String note,
                                Authentication auth) {
         var userId = authUtils.currentUserId(auth);
-        var store = storeRepository.findById(storeId).orElseThrow();
+        var store = hostRepository.findById(storeId).orElseThrow();
         if (!store.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
 
-        var s = new StoreOpenSeason();
+        var s = new HostOpenSeason();
         s.setStoreId(storeId);
         s.setStartDate(start);
         s.setEndDate(end);
@@ -288,7 +288,7 @@ public class StoreService {
     @Transactional
     public void deleteSeason(UUID storeId, UUID seasonId, Authentication auth) {
         var userId = authUtils.currentUserId(auth);
-        var store = storeRepository.findById(storeId).orElseThrow();
+        var store = hostRepository.findById(storeId).orElseThrow();
         if (!store.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
 
         var s = seasons.findById(seasonId).orElseThrow();
@@ -297,9 +297,9 @@ public class StoreService {
     }
 
     @Transactional
-    public Store updateStore(UUID storeId, @Valid CreateStoreRequest r, Authentication auth) {
+    public Host updateStore(UUID storeId, @Valid CreateHostRequest r, Authentication auth) {
         UUID userId = authUtils.currentUserId(auth);
-        Store store = storeRepository.findById(storeId)
+        Host store = hostRepository.findById(storeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
 
         if (!store.getOwnerId().equals(userId)) {
@@ -317,13 +317,13 @@ public class StoreService {
         store.setCancellationCutoffHours(r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : store.getCancellationCutoffHours());
         store.setImages( r.images() != null ? r.images().toArray(new String[0]) : null);
 
-        return storeRepository.save(store);
+        return hostRepository.save(store);
     }
 
     @Transactional
     public void deleteStore(UUID storeId, Authentication auth) {
         UUID userId = authUtils.currentUserId(auth);
-        Store store = storeRepository.findById(storeId)
+        Host store = hostRepository.findById(storeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
 
         if (!store.getOwnerId().equals(userId)) {
@@ -331,15 +331,15 @@ public class StoreService {
         }
 
         // Optional: delete spots associated with this store
-        var storeSpots = spots.findByStoreId(storeId);
-        spots.deleteAll(storeSpots);
+        var storeSpots = boothRepository.findByStoreId(storeId);
+        boothRepository.deleteAll(storeSpots);
 
         // delete seasons and blackouts
         seasons.findByStoreId(storeId).forEach(seasons::delete);
         blackouts.findByStoreId(storeId)
                 .forEach(blackouts::delete);
 
-        storeRepository.delete(store);
+        hostRepository.delete(store);
     }
 
 }

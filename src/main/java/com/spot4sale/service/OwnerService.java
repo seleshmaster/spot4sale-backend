@@ -2,11 +2,11 @@
 package com.spot4sale.service;
 
 import com.spot4sale.entity.Booking;
-import com.spot4sale.entity.Spot;
-import com.spot4sale.entity.Store;
+import com.spot4sale.entity.Booth;
+import com.spot4sale.entity.Host;
 import com.spot4sale.repository.BookingRepository;
-import com.spot4sale.repository.SpotRepository;
-import com.spot4sale.repository.StoreRepository;
+import com.spot4sale.repository.BoothRepository;
+import com.spot4sale.repository.HostRepository;
 import com.spot4sale.repository.UserRepository;
 import com.spot4sale.entity.User;
 import org.springframework.http.HttpStatus;
@@ -18,21 +18,21 @@ import java.util.*;
 
 @Service
 public class OwnerService {
-    private final StoreRepository stores;
-    private final SpotRepository spots;
+    private final HostRepository stores;
+    private final BoothRepository spots;
     private final BookingRepository bookings;
     private final UserRepository users;
 
-    public OwnerService(StoreRepository stores, SpotRepository spots, BookingRepository bookings, UserRepository users) {
+    public OwnerService(HostRepository stores, BoothRepository spots, BookingRepository bookings, UserRepository users) {
         this.stores = stores; this.spots = spots; this.bookings = bookings; this.users = users;
     }
 
-    public List<Store> myStores(Authentication auth){
+    public List<Host> myStores(Authentication auth){
         User me = AuthUtils.requireUser(users, auth);
         return stores.findByOwnerId(me.getId());
     }
 
-    public List<Spot> spotsForStore(UUID storeId, Authentication auth){
+    public List<Booth> spotsForStore(UUID storeId, Authentication auth){
         ensureOwner(storeId, auth);
         return spots.findByStoreId(storeId);
     }
@@ -40,7 +40,7 @@ public class OwnerService {
     public List<Booking> bookingsForStore(UUID storeId, Authentication auth){
         ensureOwner(storeId, auth);
         // gather all spotIds for the store, then bookings for those
-        var spotIds = spots.findByStoreId(storeId).stream().map(Spot::getId).toList();
+        var spotIds = spots.findByStoreId(storeId).stream().map(Booth::getId).toList();
         if (spotIds.isEmpty()) return List.of();
         return bookings.findBySpotIdInOrderByStartDateDesc(spotIds);
     }

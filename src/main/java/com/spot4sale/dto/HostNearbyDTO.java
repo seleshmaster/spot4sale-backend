@@ -2,7 +2,7 @@ package com.spot4sale.dto;
 
 import java.util.UUID;
 
-public interface StoreNearbyDTO {
+public interface HostNearbyDTO {
     UUID getId();
     String getName();
     String getAddress();

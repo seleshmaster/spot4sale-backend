@@ -1,7 +1,5 @@
 package com.spot4sale.dto;
 
-import com.spot4sale.entity.Store;
-
 import java.util.UUID;
 
 public record StoreSummaryDTO(

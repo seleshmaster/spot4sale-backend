@@ -1,13 +1,12 @@
 package com.spot4sale.controller;
 
 import com.spot4sale.dto.*;
-import com.spot4sale.entity.Spot;
-import com.spot4sale.entity.Store;
+import com.spot4sale.entity.Booth;
+import com.spot4sale.entity.Host;
 import com.spot4sale.service.AuthUtils;
-import com.spot4sale.service.StoreService;
+import com.spot4sale.service.HostService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.aop.support.AopUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -24,14 +23,14 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/stores")
 @RequiredArgsConstructor
-public class StoreController {
+public class HostController {
 
-    private final StoreService storeService;
+    private final HostService storeService;
     private final AuthUtils authUtils;
 
     @PreAuthorize("hasAnyRole('USER','STORE_OWNER')")
     @PostMapping
-    public Store createStore(@RequestBody @Valid CreateStoreRequest r, Authentication auth) {
+    public Host createStore(@RequestBody @Valid CreateHostRequest r, Authentication auth) {
         return storeService.createStore(r, auth);
     }
 
@@ -45,20 +44,20 @@ public class StoreController {
     }
 
     @PostMapping("/{storeId}/spots")
-    public Spot addSpot(@PathVariable UUID storeId,
-                        @RequestBody @Valid CreateSpotRequest r,
-                        Authentication auth) {
+    public Booth addSpot(@PathVariable UUID storeId,
+                         @RequestBody @Valid CreateBoothRequest r,
+                         Authentication auth) {
         return storeService.addSpot(storeId, r, auth);
     }
 
     @GetMapping("/{storeId}/spots")
-    public List<Spot> listSpots(@PathVariable UUID storeId) {
+    public List<Booth> listSpots(@PathVariable UUID storeId) {
         return storeService.listSpots(storeId);
     }
 
     @GetMapping
-    public Page<Store> listStores(@RequestParam(defaultValue = "0") int page,
-                                  @RequestParam(defaultValue = "10") int size) {
+    public Page<Host> listStores(@RequestParam(defaultValue = "0") int page,
+                                 @RequestParam(defaultValue = "10") int size) {
         return storeService.list(page, size);
     }
 
@@ -144,9 +143,9 @@ public class StoreController {
     }
 
     @PutMapping("/{storeId}")
-    public Store updateStore(@PathVariable UUID storeId,
-                             @Valid @RequestBody CreateStoreRequest request,
-                             Authentication auth) {
+    public Host updateStore(@PathVariable UUID storeId,
+                            @Valid @RequestBody CreateHostRequest request,
+                            Authentication auth) {
         return storeService.updateStore(storeId, request, auth);
     }
 

@@ -1,25 +1,21 @@
 
 package com.spot4sale.repository;
 
-import com.spot4sale.dto.PagedResponse;
-import com.spot4sale.dto.StoreNearbyDTO;
 import com.spot4sale.dto.StoreSummaryDTO;
-import com.spot4sale.entity.Store;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import com.spot4sale.entity.Host;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.*;
 
-public interface StoreRepository extends JpaRepository<Store, java.util.UUID> {
-    List<Store> findByZipCode(String zip);
+public interface HostRepository extends JpaRepository<Host, java.util.UUID> {
+    List<Host> findByZipCode(String zip);
 
-    List<Store> findByCityIgnoreCase(String city);
+    List<Host> findByCityIgnoreCase(String city);
 
 
-    List<Store> findByOwnerId(UUID ownerId);
+    List<Host> findByOwnerId(UUID ownerId);
 
     @Query("""
         SELECT new com.spot4sale.dto.StoreSummaryDTO(
@@ -31,7 +27,7 @@ public interface StoreRepository extends JpaRepository<Store, java.util.UUID> {
             s.thumbnail,
             COALESCE(AVG(r.rating), 0)
         )
-        FROM Store s
+        FROM Host s
         LEFT JOIN Review r ON r.targetId = s.id
         WHERE (:city IS NULL OR s.city = :city)
           AND (:zip IS NULL OR s.zipCode = :zip)
@@ -54,7 +50,7 @@ public interface StoreRepository extends JpaRepository<Store, java.util.UUID> {
             s.thumbnail,
             COALESCE(AVG(r.rating), 0)
         )
-        FROM Store s
+        FROM Host s
         LEFT JOIN Review r ON r.targetId = s.id
         WHERE (:city IS NULL OR s.city = :city)
           AND (:zip IS NULL OR s.zipCode = :zip)

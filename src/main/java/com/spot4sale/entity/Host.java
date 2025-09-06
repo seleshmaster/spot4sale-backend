@@ -15,7 +15,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "store")
-public class Store {
+public class Host {
     @Id
     @GeneratedValue
     private UUID id;

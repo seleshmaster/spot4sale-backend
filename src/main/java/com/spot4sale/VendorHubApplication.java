@@ -10,12 +10,12 @@ import java.util.Collection;
 
 @EnableAsync
 @SpringBootApplication
-public class Spot4SaleApplication {
+public class VendorHubApplication {
 
     @GetMapping("/api/me/roles")
     public Collection<? extends GrantedAuthority> roles(Authentication auth) {
         return auth.getAuthorities();
     }
 
-  public static void main(String[] args) { SpringApplication.run(Spot4SaleApplication.class, args); }
+  public static void main(String[] args) { SpringApplication.run(VendorHubApplication.class, args); }
 }

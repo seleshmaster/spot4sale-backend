@@ -7,7 +7,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity @Getter @Setter @NoArgsConstructor @AllArgsConstructor
-public class StoreBlackout {
+public class HostBlackout {
     @Id @GeneratedValue private UUID id;
     @Column(nullable=false) private UUID storeId;
     @Column(nullable=false, name="day") private LocalDate date;

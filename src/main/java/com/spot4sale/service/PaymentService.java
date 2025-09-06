@@ -3,12 +3,12 @@ package com.spot4sale.service;
 import com.spot4sale.config.StripeProperties;
 import com.spot4sale.dto.InitPaymentRequest;
 import com.spot4sale.entity.Booking;
-import com.spot4sale.entity.Spot;
-import com.spot4sale.entity.Store;
+import com.spot4sale.entity.Booth;
+import com.spot4sale.entity.Host;
 import com.spot4sale.entity.User;
 import com.spot4sale.repository.BookingRepository;
-import com.spot4sale.repository.SpotRepository;
-import com.spot4sale.repository.StoreRepository;
+import com.spot4sale.repository.BoothRepository;
+import com.spot4sale.repository.HostRepository;
 import com.spot4sale.repository.UserRepository;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
@@ -33,15 +33,15 @@ import java.util.UUID;
 public class PaymentService {
 
     private final BookingRepository bookings;
-    private final SpotRepository spots;
-    private final StoreRepository stores;
+    private final BoothRepository spots;
+    private final HostRepository stores;
     private final UserRepository users;
     private final StripeProperties props;
     private final BookingService bookingService; // to mark as PAID, etc.
 
     public PaymentService(BookingRepository bookings,
-                          SpotRepository spots,
-                          StoreRepository stores,
+                          BoothRepository spots,
+                          HostRepository stores,
                           UserRepository users,
                           StripeProperties props,
                           BookingService bookingService) {
@@ -73,9 +73,9 @@ public class PaymentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking has no total");
         }
 
-        Spot spot = spots.findById(b.getSpotId())
+        Booth spot = spots.findById(b.getSpotId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Spot not found"));
-        Store store = stores.findById(spot.getStoreId())
+        Host store = stores.findById(spot.getStoreId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
         User owner = users.findById(store.getOwnerId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Owner not found"));

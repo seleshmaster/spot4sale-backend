@@ -10,7 +10,7 @@ import java.util.stream.Collectors;
 @Entity
 @Table(name = "store_open_season")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
-public class StoreOpenSeason {
+public class HostOpenSeason {
     @Id
     @GeneratedValue
     private UUID id;
