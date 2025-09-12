@@ -1,29 +1,28 @@
-// StoreBlackout.java
 package com.spot4sale.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
+@Table(name = "host_category")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class HostBlackout extends BaseEntity {
+@Builder
+public class HostCategory extends BaseEntity {
+
     @Id
     @GeneratedValue
     private UUID id;
-    @Column(nullable = false)
-    private UUID hostId;
-    @Column(nullable = false, name = "day")
-    private LocalDate date;
-    private String reason;
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
+    private String name;
+
+    @Column
+    private String description;
 
 
     @PrePersist
@@ -36,7 +35,4 @@ public class HostBlackout extends BaseEntity {
     protected void onUpdate() {
         updatedAt = java.time.Instant.now();
     }
-
 }
-
-

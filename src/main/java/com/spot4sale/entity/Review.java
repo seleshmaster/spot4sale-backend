@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -20,9 +21,9 @@ import java.util.UUID;
                 @Index(name = "idx_review_target", columnList = "targetType,targetId")
         }
 )
-public class Review {
+public class Review extends BaseEntity {
 
-    public enum TargetType { STORE, SELLER }
+    public enum TargetType {STORE, SELLER}
 
     @Id
     @GeneratedValue
@@ -50,12 +51,15 @@ public class Review {
     @Column(length = 2000)
     private String comment;
 
-    @NotNull
-    @Column(nullable = false, updatable = false)
-    private Instant createdAt;
 
     @PrePersist
-    public void prePersist() {
-        createdAt = Instant.now();
+    protected void onCreate() {
+        createdAt = java.time.Instant.now();
+        updatedAt = java.time.Instant.now();
+    }
+
+    @PreUpdate
+    protected void onUpdaate() {
+        updatedAt = java.time.Instant.now();
     }
 }

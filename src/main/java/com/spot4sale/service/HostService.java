@@ -18,7 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -34,12 +36,15 @@ public class HostService {
 
     // Repos used for availability/calendar
     private final HostBlackoutRepository blackouts;            // expect: findByStoreIdAndDateBetween(...)
-    private final HostOpenSeasonRepository seasons;            // expect: findByStoreId(...)
+    private final HostOpenSeasonRepository seasons;// expect: findByStoreId(...)
+    private final AmenityRepository amenityRepository;
+    private final HostTypeRepository hostTypeRepository;
+    private final HostCategoryRepository hostCategoryRepository;
 
     /* ---------- Commands ---------- */
 
     @Transactional
-    public Host createStore(@Valid CreateHostRequest r, Authentication auth) {
+    public Host createHost(@Valid CreateHostRequest r, Authentication auth) {
         UUID ownerId = authUtils.currentUserId(auth);
 
         // Build address string for geocoding
@@ -53,42 +58,87 @@ public class HostService {
             latLon = new GeocodingService.LatLon(0, 0); // fallback if Google fails
         }
 
-        // Create store entity
-        Host s = new Host();
-        s.setId(null);
-        s.setOwnerId(ownerId);
-        s.setName(r.name());
-        s.setDescription(r.description());
-        s.setAddress(r.address());
-        s.setCity(r.city());
-        s.setZipCode(r.zipCode());
-        s.setLatitude(latLon.lat());
-        s.setLongitude(latLon.lon());
-        s.setCancellationCutoffHours(r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : 24);
-        s.setImages(r.images() != null ? r.images().toArray(new String[0]) : null);
-        s.setThumbnail(r.thumbnail());
+        // Create host entity
+        Host host = new Host();
+        host.setId(null);
+        host.setOwnerId(ownerId);
+        host.setName(r.name());
+        host.setDescription(r.description());
+        host.setAddress(r.address());
+        host.setCity(r.city());
+        host.setZipCode(r.zipCode());
+        host.setLatitude(latLon.lat());
+        host.setLongitude(latLon.lon());
+        host.setCancellationCutoffHours(r.cancellationCutoffHours() != null ? r.cancellationCutoffHours() : 24);
+        host.setImages(r.images() != null ? r.images().toArray(new String[0]) : null);
+        host.setThumbnail(r.thumbnail());
 
         // Convert characteristics map to JSON string
         if (r.characteristics() != null) {
             try {
-                s.setCharacteristics(objectMapper.writeValueAsString(r.characteristics()));
+                host.setCharacteristics(objectMapper.writeValueAsString(r.characteristics()));
             } catch (JsonProcessingException e) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid characteristics JSON", e);
             }
         }
 
-        Host saved = hostRepository.save(s);
+        // Host Type and Category
+        host.setHostType(
+                hostTypeRepository.findByName(r.hostTypeName())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "HostType not found"))
+        );
 
-        // Promote the creator to STORE_OWNER if still USER
+        host.setHostCategory(
+                hostCategoryRepository.findByName(r.hostCategoryName())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "HostCategory not found"))
+        );
+
+        // New attributes
+        host.setDefaultPrice(r.defaultPrice());
+        host.setMaxBooths(r.maxBooths());
+        if (r.operatingHours() != null) {
+            try {
+                host.setOperatingHours(objectMapper.writeValueAsString(r.operatingHours()));
+            } catch (JsonProcessingException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid operatingHours JSON", e);
+            }
+        } else {
+            host.setOperatingHours("{}"); // empty JSON object
+        }
+        host.setContactEmail(r.contactEmail());
+        host.setContactPhone(r.contactPhone());
+        host.setTags(r.tags() != null ? r.tags().toArray(new String[0]) : null);
+        host.setFootTrafficEstimate(r.footTrafficEstimate());
+        host.setCancellationPolicy(r.cancellationPolicy());
+        host.setBookingWindowDays(r.bookingWindowDays());
+        host.setActive(r.active() != null ? r.active() : true);
+
+        // Handle amenities relationship (many-to-many)
+        if (r.amenityIds() != null && !r.amenityIds().isEmpty()) {
+            Set<Amenity> amenities = new HashSet<>(amenityRepository.findAllById(r.amenityIds()));
+            if (amenities.size() != r.amenityIds().size()) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "One or more amenities not found");
+            }
+            host.setAmenities(amenities);
+        }
+
+        // Timestamps
+        host.setCreatedAt(Instant.from(LocalDateTime.now()));
+        host.setUpdatedAt(Instant.from(LocalDateTime.now()));
+
+        Host saved = hostRepository.save(host);
+
+        // Promote the creator to HOST_OWNER if still USER
         User me = userRepository.findById(ownerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-        if (!"STORE_OWNER".equalsIgnoreCase(me.getRole())) {
-            me.setRole("STORE_OWNER");
+        if (!"HOST_OWNER".equalsIgnoreCase(me.getRole())) {
+            me.setRole("HOST_OWNER");
             userRepository.save(me);
         }
 
         return saved;
     }
+
 
     @Transactional
     public Booth addSpot(UUID storeId, @Valid CreateBoothRequest r, Authentication auth) {
@@ -170,7 +220,7 @@ public class HostService {
     @Transactional(readOnly = true)
     public AvailabilityRangeDTO getAvailability(UUID storeId, LocalDate from, LocalDate to) {
         // blackouts in range
-        var bs = blackouts.findByStoreIdAndDateBetween(storeId, from, to);
+        var bs = blackouts.findByHostIdAndDateBetween(storeId, from, to);
         var blackoutDays = bs.stream().map(HostBlackout::getDate).toList();
 
         // seasons that overlap the requested range
@@ -193,22 +243,25 @@ public class HostService {
 
 
     @Transactional
-    public void setBlackouts(UUID storeId, List<LocalDate> days, Authentication auth, AuthUtils authUtils) {
+    public void setBlackouts(UUID hostId, List<LocalDate> days, Authentication auth, AuthUtils authUtils) {
         // owner check
         var userId = authUtils.currentUserId(auth);
-        var store = hostRepository.findById(storeId).orElseThrow();
-        if (!store.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        var host = hostRepository.findById(hostId).orElseThrow();
+        if (!host.getOwnerId().equals(userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
 
         // upsert MVP: clear existing in that span, then insert all provided
         if (!days.isEmpty()) {
             var min = days.stream().min(LocalDate::compareTo).orElse(LocalDate.now());
             var max = days.stream().max(LocalDate::compareTo).orElse(LocalDate.now());
-            var existing = blackouts.findByStoreIdAndDateBetween(storeId, min, max);
+            var existing = blackouts.findByHostIdAndDateBetween(hostId, min, max);
             blackouts.deleteAll(existing);
         }
 
-        for (var d : days) {
-            var b = new HostBlackout(null, storeId, d, "Owner-set", null);
+        for (LocalDate d : days) {
+            HostBlackout b = new HostBlackout();
+            b.setHostId(hostId);        // pass Host entity
+            b.setDate(d);
+            b.setReason("Owner-set");
             blackouts.save(b);
         }
     }
@@ -219,12 +272,12 @@ public class HostService {
         // If no seasons defined, treat as open (only blackouts apply)
         var storeSeasons = seasons.findByStoreId(storeId);
         if (storeSeasons.isEmpty()) {
-            return blackouts.findByStoreIdAndDateBetween(storeId, start, end).isEmpty();
+            return blackouts.findByHostIdAndDateBetween(storeId, start, end).isEmpty();
         }
 
         // Gather blackouts in range for quick lookup
         var blackoutDays = new HashSet<>(
-                blackouts.findByStoreIdAndDateBetween(storeId, start, end).stream()
+                blackouts.findByHostIdAndDateBetween(storeId, start, end).stream()
                         .map(HostBlackout::getDate).toList()
         );
 
@@ -336,7 +389,7 @@ public class HostService {
 
         // delete seasons and blackouts
         seasons.findByStoreId(storeId).forEach(seasons::delete);
-        blackouts.findByStoreId(storeId)
+        blackouts.findByHostId(storeId)
                 .forEach(blackouts::delete);
 
         hostRepository.delete(store);

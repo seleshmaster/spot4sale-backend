@@ -17,21 +17,21 @@ public class BoothController {
     private final BoothService svc;
     public BoothController(BoothService svc){ this.svc = svc; }
 
-    @GetMapping("/spots/{spotId}")
-    public Booth getById(@PathVariable UUID spotId, Authentication auth) {
-        return svc.getSpot(spotId, auth);
+    @GetMapping("/booths/{boothId}")
+    public Booth getById(@PathVariable UUID boothId, Authentication auth) {
+        return svc.getSpot(boothId, auth);
     }
 
     /** Owner-only: create a spot */
-    @PostMapping("/spots")
+    @PostMapping("/booths")
     @ResponseStatus(HttpStatus.CREATED)
     public Booth create(@Valid @RequestBody CreateBoothRequest r, Authentication auth) {
         return svc.create(r, auth);
     }
 
     /** Owner-only: update price/availability */
-    @PatchMapping("/spots/{spotId}")
-    public Booth update(@PathVariable UUID spotId, @Valid @RequestBody UpdateHostRequest r, Authentication auth) {
-        return svc.update(spotId, r, auth);
+    @PatchMapping("/booths/{boothId}")
+    public Booth update(@PathVariable UUID boothId, @Valid @RequestBody UpdateHostRequest r, Authentication auth) {
+        return svc.update(boothId, r, auth);
     }
 }

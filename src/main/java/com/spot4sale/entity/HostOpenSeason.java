@@ -3,14 +3,18 @@ package com.spot4sale.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Entity
-@Table(name = "store_open_season")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
-public class HostOpenSeason {
+@Table(name = "host_open_season")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class HostOpenSeason extends BaseEntity {
     @Id
     @GeneratedValue
     private UUID id;
@@ -47,5 +51,17 @@ public class HostOpenSeason {
         } else {
             this.openWeekdaysCsv = days.stream().map(String::valueOf).collect(Collectors.joining(","));
         }
+    }
+
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = java.time.Instant.now();
+        updatedAt = java.time.Instant.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = java.time.Instant.now();
     }
 }

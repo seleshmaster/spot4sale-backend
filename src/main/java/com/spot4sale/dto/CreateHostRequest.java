@@ -1,9 +1,9 @@
 package com.spot4sale.dto;
 
 import jakarta.validation.constraints.*;
-
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 public record CreateHostRequest(
         @NotBlank @Size(max = 120) String name,
@@ -19,5 +19,23 @@ public record CreateHostRequest(
         Integer cancellationCutoffHours,           // nullable; defaulted in service
         List<String> images,                        // multiple images
         String thumbnail,                           // single thumbnail
-        Map<String, Object> characteristics        // flexible key-value attributes
+        Map<String, Object> characteristics,       // flexible key-value attributes
+
+        // --- New fields ---
+        Double defaultPrice,                        // nullable
+        List<String> defaultAmenities,              // list of amenities
+        Integer maxBooths,                          // nullable
+        Map<String, Object> operatingHours,        // JSON key-value for operating hours
+        String contactEmail,                        // nullable
+        String contactPhone,                        // nullable
+        List<String> tags,                          // list of tags
+        Integer footTrafficEstimate,                // nullable
+        String cancellationPolicy,                  // nullable
+        Integer bookingWindowDays,                  // nullable
+        Boolean active,                             // nullable; defaults to true if not provided
+        List<UUID> amenityIds,                      // link by ID
+
+        // --- New: resolve by name ---
+        String hostTypeName,
+        String hostCategoryName
 ) {}

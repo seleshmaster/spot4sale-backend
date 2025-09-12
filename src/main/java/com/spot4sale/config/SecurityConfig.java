@@ -32,10 +32,10 @@ public class SecurityConfig {
                                 "/actuator/health", "/v3/api-docs/**",
                                 "/swagger-ui.html", "/swagger-ui/**","/oauth2/**", "/login/**", "/images/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reviews/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/stores/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/stores/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/spots").authenticated()
-                        .requestMatchers(HttpMethod.PATCH, "/api/spots/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/hosts/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/hosts/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/booths").authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/booths/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/bookings").authenticated()
                         .requestMatchers("/api/owner/**").authenticated()
                         .anyRequest().authenticated())// <-- add this

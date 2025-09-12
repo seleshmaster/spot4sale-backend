@@ -21,7 +21,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/stores")
+@RequestMapping("/api/hosts")
 @RequiredArgsConstructor
 public class HostController {
 
@@ -31,7 +31,7 @@ public class HostController {
     @PreAuthorize("hasAnyRole('USER','STORE_OWNER')")
     @PostMapping
     public Host createStore(@RequestBody @Valid CreateHostRequest r, Authentication auth) {
-        return storeService.createStore(r, auth);
+        return storeService.createHost(r, auth);
     }
 
     @GetMapping("/{id}")
@@ -43,16 +43,16 @@ public class HostController {
         return ResponseEntity.ok(dto);
     }
 
-    @PostMapping("/{storeId}/spots")
-    public Booth addSpot(@PathVariable UUID storeId,
+    @PostMapping("/{hostId}/booths")
+    public Booth addSpot(@PathVariable UUID hostId,
                          @RequestBody @Valid CreateBoothRequest r,
                          Authentication auth) {
-        return storeService.addSpot(storeId, r, auth);
+        return storeService.addSpot(hostId, r, auth);
     }
 
-    @GetMapping("/{storeId}/spots")
-    public List<Booth> listSpots(@PathVariable UUID storeId) {
-        return storeService.listSpots(storeId);
+    @GetMapping("/{hostId}/booths")
+    public List<Booth> listSpots(@PathVariable UUID hostId) {
+        return storeService.listSpots(hostId);
     }
 
     @GetMapping
@@ -96,33 +96,33 @@ public class HostController {
     }
 
     // GET availability for a calendar (owner & customers)
-    @GetMapping("/{storeId}/availability")
-    public AvailabilityRangeDTO availability(@PathVariable UUID storeId,
+    @GetMapping("/{hostId}/availability")
+    public AvailabilityRangeDTO availability(@PathVariable UUID hostId,
                                              @RequestParam LocalDate from,
                                              @RequestParam LocalDate to) {
-        return storeService.getAvailability(storeId, from, to);
+        return storeService.getAvailability(hostId, from, to);
     }
 
     // OWNER: set blackout dates (simple MVP)
     @PreAuthorize("hasAnyRole('STORE_OWNER')")
-    @PostMapping("/{storeId}/availability/blackouts")
-    public void setBlackouts(@PathVariable UUID storeId,
+    @PostMapping("/{hostId}/availability/blackouts")
+    public void setBlackouts(@PathVariable UUID hostId,
                              @RequestBody List<LocalDate> days,
                              Authentication auth) {
-        storeService.setBlackouts(storeId, days, auth, authUtils);
+        storeService.setBlackouts(hostId, days, auth, authUtils);
     }
 
     @PreAuthorize("hasAnyRole('STORE_OWNER')")
-    @GetMapping("/{storeId}/availability/seasons")
-    public List<SeasonDTO> listSeasons(@PathVariable UUID storeId) {
-        return storeService.listSeasons(storeId);
+    @GetMapping("/{hostId}/availability/seasons")
+    public List<SeasonDTO> listSeasons(@PathVariable UUID hostId) {
+        return storeService.listSeasons(hostId);
     }
 
     @PreAuthorize("hasAnyRole('STORE_OWNER')")
-    @PostMapping("/{storeId}/availability/seasons")
-    public SeasonDTO addSeason(@PathVariable UUID storeId, @RequestBody @Valid CreateSeasonRequest r, Authentication auth) {
+    @PostMapping("/{hostId}/availability/seasons")
+    public SeasonDTO addSeason(@PathVariable UUID hostId, @RequestBody @Valid CreateSeasonRequest r, Authentication auth) {
         return storeService.addSeason(
-                storeId,
+                hostId,
                 r.startDate(),
                 r.endDate(),
                 r.openWeekdays() != null
@@ -136,17 +136,17 @@ public class HostController {
     }
 
     @PreAuthorize("hasAnyRole('STORE_OWNER')")
-    @DeleteMapping("/{storeId}/availability/seasons/{seasonId}")
+    @DeleteMapping("/{hostId}/availability/seasons/{seasonId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteSeason(@PathVariable UUID storeId, @PathVariable UUID seasonId, Authentication auth) {
-        storeService.deleteSeason(storeId, seasonId, auth);
+    public void deleteSeason(@PathVariable UUID hostId, @PathVariable UUID seasonId, Authentication auth) {
+        storeService.deleteSeason(hostId, seasonId, auth);
     }
 
-    @PutMapping("/{storeId}")
-    public Host updateStore(@PathVariable UUID storeId,
+    @PutMapping("/{hostId}")
+    public Host updateStore(@PathVariable UUID hostId,
                             @Valid @RequestBody CreateHostRequest request,
                             Authentication auth) {
-        return storeService.updateStore(storeId, request, auth);
+        return storeService.updateStore(hostId, request, auth);
     }
 
     @DeleteMapping("/{storeId}")

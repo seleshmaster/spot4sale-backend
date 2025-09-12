@@ -79,7 +79,7 @@ public interface HostRepository extends JpaRepository<Host, java.util.UUID> {
               cos(radians(s.longitude) - radians(:lon)) +
               sin(radians(:lat)) * sin(radians(s.latitude))
           )))) AS "distanceMeters"
-        FROM store s
+        FROM host s
         LEFT JOIN review r ON s.id = r.target_id
         WHERE s.latitude IS NOT NULL AND s.longitude IS NOT NULL
           AND (6371000 * acos(LEAST(1, GREATEST(-1,
